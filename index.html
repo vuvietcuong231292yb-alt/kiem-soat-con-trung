@@ -137,6 +137,7 @@ const LS = {
   del(k) { try { localStorage.removeItem(k); } catch (e) {} }
 };
 let TOKEN = LS.get('kct_token') || '';
+const TOC_DO = [];
 let LOI_CUOI = '', LECH_GIO = 0, GPS_LOI = null, GPS_WATCH = null;
 let APP = null, CUR = null, STACK = [], PH = {}, F = {}, GPS = null, WM = '', QR_CHO = QR_PARAM, BUSY = 0;
 const $ = s => document.querySelector(s);
@@ -154,14 +155,21 @@ function toast(m, t) { const e = $('#toast'); e.textContent = m; e.className = t
 async function call(a, p, quiet) {
   if (!quiet) busy(true);
   try {
-    const res = await fetch(API, { method: 'POST', body: JSON.stringify({ token: TOKEN, action: a, p: p || {} }) });
+    const ctl = window.AbortController ? new AbortController() : null;
+    const hen = setTimeout(() => ctl && ctl.abort(), 45000);
+    const t0 = Date.now();
+    let res;
+    try { res = await fetch(API, { method: 'POST', body: JSON.stringify({ token: TOKEN, action: a, p: p || {} }), signal: ctl ? ctl.signal : undefined }); }
+    finally { clearTimeout(hen); }
+    TOC_DO.push({ a, giay: (Date.now() - t0) / 1000 }); if (TOC_DO.length > 20) TOC_DO.shift();
     let j;
     try { j = await res.json(); } catch (e) { throw new Error('Máy chủ trả về dữ liệu lạ – kiểm tra link /exec và quyền truy cập "Bất kỳ ai" khi triển khai'); }
     if (j.loi) throw new Error(j.loi);
     return j.kq;
   } catch (e) {
     let m = (e && e.message) || String(e);
-    if (/Failed to fetch|NetworkError|Load failed|network/i.test(m)) m = 'Không kết nối được máy chủ – kiểm tra mạng (4G/Wi-Fi) rồi thử lại';
+    if (e && e.name === 'AbortError') m = 'Máy chủ không phản hồi sau 45 giây – mạng yếu hoặc máy chủ đang bận, thử lại';
+    else if (/Failed to fetch|NetworkError|Load failed|network/i.test(m)) m = 'Không kết nối được máy chủ – kiểm tra mạng (4G/Wi-Fi) rồi thử lại';
     LOI_CUOI = m;
     if (/đăng nhập lại/.test(m)) { TOKEN = ''; LS.del('kct_token'); renderLogin(); }
     toast(m, 'err');
@@ -310,7 +318,7 @@ PAGES.gpsHelp = async function () {
     <div class="muted" style="margin-top:4px">App tự bật định vị khi mở. Ảnh chụp được đóng dấu tọa độ, kiểm tra không có GPS bị đánh dấu trong báo cáo.</div>
     <button class="btn btn-block" style="margin-top:10px" onclick="batGPS();toast('Đang bật lại định vị…')">📍 Bật / lấy lại vị trí</button></div>
     ${quyen === 'denied' || /cho phép/.test(GPS_LOI || '') ? `<div class="card"><b>Trình duyệt đang chặn vị trí – mở lại quyền 1 lần:</b><div style="margin-top:6px">${ios
-      ? '• iPhone: <b>Cài đặt › Quyền riêng tư & Bảo mật › Dịch vụ định vị</b> – bật, rồi chọn <b>Safari</b> (hoặc Chrome) › <b>Khi dùng ứng dụng</b>.<br>• Trong Safari: bấm <b>aA</b> trên thanh địa chỉ › Cài đặt trang web › Vị trí › <b>Cho phép</b>.'
+      ? '1. <b>Cài đặt › Quyền riêng tư & Bảo mật › Dịch vụ định vị</b> › kéo xuống <b>cuối danh sách</b> › <b>Trang web Safari</b> › chọn <b>Khi dùng ứng dụng</b>, bật <b>Vị trí chính xác</b>.<br>2. <b>Cài đặt › Ứng dụng › Safari</b> › kéo xuống mục <i>Cài đặt cho trang web</i> › <b>Vị trí</b> › chọn <b>Hỏi</b>.<br>3. Quay lại app trong Safari, bấm <b>biểu tượng bên trái ô địa chỉ</b> › <b>Cài đặt trang web</b> › <b>Vị trí</b> › <b>Cho phép</b>, rồi tải lại trang.<br>Nếu đang mở app từ Teams/Zalo, hãy mở bằng <b>Safari</b>.'
       : '• Chrome Android: bấm biểu tượng <b>ổ khóa / ⚙</b> cạnh thanh địa chỉ › <b>Quyền</b> › <b>Vị trí</b> › <b>Cho phép</b>.<br>• Nếu không thấy: Chrome › Cài đặt › Cài đặt trang web › Vị trí › mục Bị chặn › chọn script.google.com › Cho phép.'}</div>
       <div class="muted" style="margin-top:6px">Sau đó quay lại và bấm "Bật / lấy lại vị trí".</div></div>` : ''}
     <div class="card"><b>Nếu điện thoại đang tắt định vị</b><div style="margin-top:6px">Vuốt thanh thông báo xuống và bật <b>Vị trí / Định vị</b> (${ios ? 'Cài đặt › Quyền riêng tư › Dịch vụ định vị' : 'biểu tượng ⌖ Vị trí'}), rồi bấm nút bên trên. Trong nhà ga, hầm có thể sai số lớn – đứng gần cửa hoặc chỗ thoáng để bắt nhanh hơn.</div></div>`);
@@ -340,7 +348,7 @@ function nenAnh(file, g) {
   return new Promise((res, rej) => {
     const url = URL.createObjectURL(file); const img = new Image();
     img.onload = () => {
-      let w = img.naturalWidth, hh = img.naturalHeight; const sc = Math.min(1, 1600 / Math.max(w, hh));
+      let w = img.naturalWidth, hh = img.naturalHeight; const sc = Math.min(1, 1280 / Math.max(w, hh));
       w = Math.round(w * sc); hh = Math.round(hh * sc);
       const c = document.createElement('canvas'); c.width = w; c.height = hh; const x = c.getContext('2d');
       x.drawImage(img, 0, 0, w, hh);
@@ -367,7 +375,7 @@ function nenAnh(file, g) {
         x.fillText(l.t, pad + 4, y, w - pad * 2);
         y += fs * l.to * 1.32;
       });
-      URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', .75));
+      URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', .7));
     };
     img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Không đọc được ảnh')); };
     img.src = url;
@@ -1343,6 +1351,7 @@ PAGES.acc = function () {
     <div class="card"><b>Đổi mật khẩu</b><div class="fld" style="margin-top:8px"><label>Mật khẩu hiện tại</label><input id="mc" type="password"></div>
     <div class="fld"><label>Mật khẩu mới (từ 6 ký tự)</label><input id="mm" type="password"></div>
     <button class="btn" onclick="doiMK(this)">Đổi mật khẩu</button></div>
+    <div class="card"><b>Tốc độ máy chủ (các lần gọi gần nhất)</b><div class="muted" style="margin-top:6px">${TOC_DO.length ? TOC_DO.slice().reverse().map(x => h(x.a) + ': ' + x.giay.toFixed(1) + ' giây').join('<br>') : 'Chưa có số liệu'}</div></div>
     <button class="btn btn-ro btn-block" onclick="dangXuat()">Đăng xuất</button>`);
 };
 async function doiMK(b) { const r = await gui(b, 'doiMatKhau', { cu: $('#mc').value, moi: $('#mm').value }, 'Đã đổi mật khẩu – các máy khác sẽ phải đăng nhập lại'); if (r) { TOKEN = r.token; if (LS.get('kct_token')) LS.set('kct_token', TOKEN); $('#mc').value = ''; $('#mm').value = ''; } }
