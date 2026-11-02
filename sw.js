@@ -2,7 +2,7 @@
    - Trang app (index.html): lấy bản mới khi có mạng, mất mạng thì dùng bản đã lưu.
    - Thư viện (QR, Excel): lưu lần đầu rồi dùng lại.
    - Máy chủ dữ liệu (Google) và ảnh: không lưu. */
-const BAN = 'kct-v1';
+const BAN = 'kct-v2';
 const THU_VIEN = [
   'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
   'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'
