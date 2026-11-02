@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Giám sát côn trùng</title>
 <meta name="theme-color" content="#1f7a4d">
+<link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="KS côn trùng">
@@ -212,6 +213,8 @@ details.in-step summary{padding:6px 0;color:var(--g);font-weight:600}
 /* ====== ĐỊA CHỈ MÁY CHỦ: dán link /exec của Apps Script vào giữa hai dấu nháy ====== */
 const API = 'https://script.google.com/macros/s/AKfycbxscAunxFrnPKsdeUQPj-mvg0VG3Kn5TZW0oTruacvSvx8dMYjIA7_T-DsymGhKb5WCzw/exec';
 /* ================================================================================== */
+const YC_PARAM = (() => { try { return (new URLSearchParams(location.search).get('yc') || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 30); } catch (e) { return ''; } })();
+let YC_CHO = YC_PARAM;
 const QR_PARAM = (() => { try { return (new URLSearchParams(location.search).get('t') || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 30); } catch (e) { return ''; } })();
 
 /* ---------------- tiện ích ---------------- */
@@ -276,7 +279,7 @@ function thumbs(ids) {
 }
 
 /* ---------------- điều hướng ---------------- */
-const PHIEN_BAN = '02/11/2026 (c)';
+const PHIEN_BAN = '02/11/2026 (d)';
 const PAGES = {};
 let NAV_ON = 'home', BADGE_YC = 0, DD_TIEP = null;
 function go(fn, args, push = true) {
@@ -411,11 +414,18 @@ function moDau() {
     STACK = [{ fn: 'home', args: [] }]; CUR = null;
     return c.includes('-') ? go('tramCT', [c, 'QR'], false) : go('khuCT', [c, 'QR'], false);
   }
+  setTimeout(osTuDong, 2500);
+  if (YC_CHO) {
+    const c = YC_CHO; YC_CHO = '';
+    renderNav(dauTab());
+    STACK = [{ fn: dauTab(), args: [] }]; CUR = null;
+    return go('ycCT', [c], false);
+  }
   tab(dauTab());
 }
 async function start() {
   if (/DAN_LINK_EXEC/.test(API)) return main('<div class="card" style="margin-top:20px"><b style="color:var(--red)">Chưa khai báo địa chỉ máy chủ</b><div style="margin-top:6px">Mở file index.html, tìm dòng <code>const API = ...</code> và dán link /exec của Apps Script vào.</div></div>');
-  if (QR_CHO) { try { history.replaceState(null, '', location.pathname); } catch (e) {} }
+  if (QR_CHO || YC_CHO) { try { history.replaceState(null, '', location.pathname); } catch (e) {} }
   if (!TOKEN) return renderLogin();
   let cu = null;
   try { cu = JSON.parse(LS.get('kct_app') || 'null'); } catch (e) { cu = null; }
@@ -817,6 +827,7 @@ PAGES.home = function () {
     const tile = (fn, so, ic, ten, phu, cls) => `<div class="tile ${cls || ''}" onclick="go('${fn}')"><span class="tn">${so}</span><div class="ti">${ic}</div><b>${ten}</b><small>${phu}</small></div>`;
     let s = userBar();
     if (OFFLINE) s += bannerOffline();
+    s += tbBanner();
     s += '<div class="tiles">';
     s += tile('ddPage', dd ? '✓' : '1', '📍', ncc ? 'Điểm danh' : 'Điểm danh NCC',
       ncc ? (dd ? 'Đã điểm danh ' + h(r.coMat) : coLich ? '<b>Bắt buộc hôm nay</b>' : 'Chưa điểm danh') : (dd ? r.nccHom.map(x => h(x.ten.split(' ').pop()) + ' ' + x.gio).join(', ') : '<b>Chưa có ai</b>'),
@@ -1313,6 +1324,7 @@ PAGES.more = function () {
   }
   s += '<div class="grp">Thiết bị & tài khoản</div>';
   s += muc('gpsHelp', '🛰', 'Định vị GPS', 'Bật lại vị trí, hướng dẫn cấp quyền');
+  s += muc('thongBao', '🔔', 'Thông báo đẩy', 'Báo ngay trên điện thoại khi có công việc phát sinh');
   s += muc('hangDoi', '📤', 'Bản ghi chờ gửi', 'Ghi lúc mất mạng');
   s += muc('acc', '🔑', 'Đổi mật khẩu · tốc độ máy chủ');
   s += `<button class="btn btn-ro btn-block" style="margin-top:6px" onclick="xacNhanThoat()">⎋ Đăng xuất</button>`;
@@ -1518,7 +1530,7 @@ PAGES.baoCao = function (thang) {
   setTitle('Báo cáo');
   main(`<div class="seg">${BC_TABS.map(t => `<button class="${BC_TAB === t[0] ? 'on' : ''}" onclick="moTab('${t[0]}')">${t[1]}</button>`).join('')}</div><div id="bch"></div><div id="bcb"></div>`);
   if (BC_TAB === 'nk') { XD_HOST = 'bc'; return veXDTrang(); }
-  $('#bch').innerHTML = `<div class="row" style="margin-bottom:8px"><input type="month" id="bt" value="${BC_TH}" onchange="PAGES.baoCao(this.value)" class="grow"><button class="btn" onclick="xuatExcel(this)">⬇ Excel</button></div>`;
+  $('#bch').innerHTML = `<div class="row" style="margin-bottom:8px"><input type="month" id="bt" value="${BC_TH}" onchange="PAGES.baoCao(this.value)" class="grow"><button class="btn" onclick="xuatExcel(this)">⬇ Excel</button></div><div style="margin:-2px 2px 8px">${oXlAnh()}</div>`;
   $('#bcb').innerHTML = '<div class="muted">Đang tính toán…</div>';
   taiNhanh('bc2_' + BC_TH, 'baoCao', { thang: BC_TH }, (r) => {
     if (!$('#bcb')) return;
@@ -1937,6 +1949,7 @@ async function xuatExcel(b) {
     const r = await call('baoCao', { thang }); if (!r || !r.nt) throw new Error('Không lấy được báo cáo');
     const nk = await call('nhatKyThang', { thang }); if (!nk) throw new Error('Không lấy được nhật ký');
     BC = r;
+    const ANH = XL_ANH ? await taiAnhNho(r.nt.giaiTrinh.map(x => idsAnh(x.anh, 1)).flat().concat(idsNK(nk))) : null;
     const n = r.nt, cb = r.canhBao, nhanThang = thang.slice(5) + '/' + thang.slice(0, 4), T = '#,##0';
     const wb = new ExcelJS.Workbook(); wb.creator = APP.user.hoTen; wb.created = new Date();
 
@@ -1960,6 +1973,7 @@ async function xuatExcel(b) {
     ws0.getRow(ws0.rowCount).font = { bold: true };
     ws0.getCell(ws0.rowCount + 2, 1).value = 'Ngày xuất: ' + new Date().toLocaleString('vi-VN') + ' – ' + APP.user.hoTen;
     if (n.tamTinh) ws0.getCell(ws0.rowCount + 1, 1).value = 'Lưu ý: tháng chưa kết thúc, số liệu tạm tính.';
+    ws0.getCell(ws0.rowCount + 1, 1).value = ghiChuAnh(ANH);
     const kyR = ws0.rowCount + 3;
     ws0.getCell(kyR, 1).value = 'ĐẠI DIỆN BÊN B'; ws0.getCell(kyR, 3).value = 'ĐẠI DIỆN BÊN A';
     ws0.getCell(kyR, 1).font = ws0.getCell(kyR, 3).font = { bold: true };
@@ -1986,10 +2000,11 @@ async function xuatExcel(b) {
       { to: row => row[10] === 'Áp dụng' ? XL.do : null });
 
     // 5. Giải trình
-    trangBang(wb, 'Giải trình', 'CẢNH BÁO VỊ TRÍ / ẢNH VÀ GIẢI TRÌNH – THÁNG ' + nhanThang,
-      [{ h: 'Thời gian', w: 17 }, { h: 'Loại', w: 16 }, { h: 'Đối tượng', w: 12 }, { h: 'Người', w: 18 }, { h: 'Cảnh báo', w: 34 }, { h: 'Giải trình', w: 44 }, { h: 'Kết quả duyệt', w: 14 }, { h: 'Người duyệt', w: 22 }, { h: 'Ảnh', w: 12 }],
-      n.giaiTrinh.length ? n.giaiTrinh.map(x => [x.tg, x.loai, x.dt, x.ai, x.canhBao, x.giaiTrinh, x.duyet || 'Chờ duyệt', x.nguoiDuyet, linkAnh(x.anh)]) : [['Không có', '', '', '', '', '', '', '', '']],
+    const gtCols = [{ h: 'Thời gian', w: 17 }, { h: 'Loại', w: 16 }, { h: 'Đối tượng', w: 12 }, { h: 'Người', w: 18 }, { h: 'Cảnh báo', w: 34 }, { h: 'Giải trình', w: 44 }, { h: 'Kết quả duyệt', w: 14 }, { h: 'Người duyệt', w: 22 }, { h: 'Link ảnh', w: 12 }];
+    const wsG = trangBang(wb, 'Giải trình', 'CẢNH BÁO VỊ TRÍ / ẢNH VÀ GIẢI TRÌNH – THÁNG ' + nhanThang, gtCols.concat(ANH ? [{ h: 'Ảnh chụp', w: 19 }] : []),
+      n.giaiTrinh.length ? n.giaiTrinh.map(x => [x.tg, x.loai, x.dt, x.ai, x.canhBao, x.giaiTrinh, x.duyet || 'Chờ duyệt', x.nguoiDuyet, linkAnh(x.anh)].concat(ANH ? [''] : [])) : [['Không có', '', '', '', '', '', '', '', ''].concat(ANH ? [''] : [])],
       { to: row => row[6] === 'Không chấp nhận' ? XL.do : row[6] === 'Chờ duyệt' ? XL.cam : null });
+    if (ANH) chenAnh(wb, wsG, n.giaiTrinh.map(x => idsAnh(x.anh, 1)), 4, gtCols.length + 1, 1, ANH);
 
     // 6. Kiểm tra theo tuần
     const colsT = [{ h: 'Mã khu', w: 8, c: 1 }, { h: 'Khu vực', w: 44 }, { h: 'Số trạm', w: 8, c: 1 }]
@@ -2021,7 +2036,7 @@ async function xuatExcel(b) {
     (cb.guiTre || []).forEach(x => dsCB.push(['Ghi khi mất mạng, gửi trễ / giờ máy bất thường', `${x.loai} ${x.doiTuong} – ghi ${x.tg} – nhận ${x.nhan} – ${x.cach} – ${x.ai}`]));
     trangBang(wb, 'Cảnh báo khác', 'CẢNH BÁO KHÁC – THÁNG ' + nhanThang, [{ h: 'Loại cảnh báo', w: 38 }, { h: 'Nội dung', w: 90 }], dsCB.length ? dsCB : [['Không có cảnh báo', '']]);
 
-    themNK(wb, nk);
+    themNK(wb, nk, ANH);
     await taiXuong(wb, `NghiemThu_KSCT_${thang}.xlsx`);
   } catch (e) { toast(e.message, 'err'); }
   b.disabled = false;
@@ -2220,7 +2235,7 @@ function veXDTrang() {
     <div class="card"><b>Lọc (không bắt buộc)</b><div class="fld" style="margin-top:8px"><label>Khu vực</label>${khuSelect('xKhu', L.khu, 'Tất cả khu vực')}</div>
       <div class="fld"><label>Vị trí / mã trạm (xem lịch sử 1 trạm)</label><input id="xTram" value="${h(L.tram)}" placeholder="VD: C15-001" autocapitalize="characters"></div>
       <label class="row" style="font-weight:400"><input type="checkbox" id="xCB" ${XD_CB ? 'checked' : ''} onchange="XD_CB=this.checked;XD_SO=60;if(XD)veXD()"> Chỉ hiện lượt có cảnh báo</label></div>
-    <div class="mrow"><button class="btn btn-o big" onclick="layXD(this,false)">👁 Xem trên app</button><button class="btn big" onclick="layXD(this,true)">⬇ Tải Excel</button></div>
+    <div style="margin:0 2px 8px">${oXlAnh()}</div><div class="mrow"><button class="btn btn-o big" onclick="layXD(this,false)">👁 Xem trên app</button><button class="btn big" onclick="layXD(this,true)">⬇ Tải Excel</button></div>
     <div id="xdKq"></div>`);
   if (XD_HOST === 'bc' && $('#bcb')) $('#bcb').innerHTML = html; else main(html);
   if (XD) veXD();
@@ -2257,12 +2272,13 @@ async function xuatXDExcel(b) {
   try {
     await napExcel();
     const r = XD;
+    const ANH = XL_ANH ? await taiAnhNho(idsNK(r)) : null;
     const wb = new ExcelJS.Workbook(); wb.creator = APP.user.hoTen; wb.created = new Date();
     const ten = XD_LOAI.filter(x => XD_LOC.loai.includes(x[0])).map(x => x[1]).join(', ');
     const ws = trangBang(wb, 'Thông tin', 'DỮ LIỆU GIÁM SÁT DỊCH VỤ KIỂM SOÁT CÔN TRÙNG', [{ h: 'Nội dung', w: 30 }, { h: 'Giá trị', w: 70 }], [
       ['Khoảng ngày', dmy(r.tu) + ' – ' + dmy(r.den)], ['Loại dữ liệu', ten], ['Khu vực', r.khuLoc ? r.khuLoc + ' – ' + tenKhu(r.khuLoc) : 'Tất cả'], ['Mã trạm', r.tramLoc || 'Tất cả'],
       ['Số lượt kiểm tra trạm', r.tram.length], ['Số lượt kiểm tra khu', r.khu.length], ['Số lần phun', r.phun.length], ['Số lượt điểm danh', r.coMat.length], ['Số yêu cầu phát sinh', (r.yeuCau || []).length],
-      ['Người xuất', r.nguoiXuat], ['Thời điểm xuất', r.luc], ['Ghi chú', 'Cột "Ảnh" là link xem ảnh gốc trên Google Drive (ảnh có đóng dấu giờ, vị trí, người chụp).']]);
+      ['Người xuất', r.nguoiXuat], ['Thời điểm xuất', r.luc], ['Ảnh minh chứng', ghiChuAnh(ANH)]]);
     // tổng hợp theo khu
     const tk = {};
     APP.khu.forEach(k => tk[k.ma] = { kt: 0, ngay: new Set(), kk: 0, dk: 0, sa: 0, bs: 0 });
@@ -2271,24 +2287,75 @@ async function xuatXDExcel(b) {
     r.phun.forEach(x => { const t = tk[x[1]]; if (t) { if (x[3] === 'Định kỳ') t.dk++; else if (x[3] === 'Tinh dầu sả') t.sa++; else t.bs++; } });
     trangBang(wb, 'Tổng hợp theo khu', 'TỔNG HỢP THEO KHU – ' + dmy(r.tu) + ' đến ' + dmy(r.den), [{ h: 'Mã khu', w: 8, c: 1 }, { h: 'Khu vực', w: 46 }, { h: 'Lượt quét trạm', w: 10, c: 1 }, { h: 'Lượt kiểm tra khu', w: 10, c: 1 }, { h: 'Số ngày có kiểm tra', w: 10, c: 1 }, { h: 'Phun định kỳ', w: 9, c: 1 }, { h: 'Tinh dầu sả', w: 9, c: 1 }, { h: 'Phun bổ sung', w: 9, c: 1 }],
       APP.khu.filter(k => !r.khuLoc || k.ma === r.khuLoc).map(k => { const t = tk[k.ma]; return [k.ma, k.ten, t.kt, t.kk, t.ngay.size, t.dk, t.sa, t.bs]; }));
-    themNK(wb, r);
+    themNK(wb, r, ANH);
     await taiXuong(wb, `DuLieu_KSCT_${r.tu}_${r.den}${r.khuLoc ? '_' + r.khuLoc : ''}${r.tramLoc ? '_' + r.tramLoc : ''}.xlsx`);
   } catch (e) { toast(e.message, 'err'); }
   if (b) b.disabled = false;
 }
-/** Các trang nhật ký chi tiết trong file Excel (dùng chung cho báo cáo tháng và xuất dữ liệu) */
-function themNK(wb, nk) {
-  if (nk.tram.length || !nk.yeuCau) trangBang(wb, 'NK kiểm tra trạm', null, [{ h: 'Thời gian', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Trạm', w: 10 }, { h: 'Người thực hiện', w: 18 }, { h: 'Cách ghi', w: 9 }, { h: 'Tình trạng bả', w: 12 }, { h: 'Thay bả', w: 8, c: 1 }, { h: 'Dấu hiệu', w: 18 }, { h: 'Tình trạng trạm', w: 13 }, { h: 'Ghi chú', w: 24 }, { h: 'Vùng định vị', w: 16 }, { h: 'GPS', w: 24 }, { h: 'Ảnh', w: 12 }, { h: 'Cách gửi', w: 18 }],
-    nk.tram.map(x => x.slice(0, 12).concat([linkAnh(x[12]), x[13]])), { to: row => row[4] === 'Nhập tay' ? XL.cam : null });
-  if (nk.khu.length || !nk.yeuCau) trangBang(wb, 'NK kiểm tra khu', null, [{ h: 'Thời gian', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Người thực hiện', w: 18 }, { h: 'Cách ghi', w: 9 }, { h: 'Côn trùng', w: 11 }, { h: 'Rắn', w: 12 }, { h: 'Xác chuột', w: 8, c: 1 }, { h: 'Đã xử lý', w: 26 }, { h: 'Ghi chú', w: 26 }, { h: 'GPS', w: 24 }, { h: 'Ảnh', w: 12 }, { h: 'Vùng định vị', w: 16 }, { h: 'Cách gửi', w: 18 }],
-    nk.khu.map(x => x.slice(0, 10).concat([linkAnh(x[10]), x[11], x[12]])));
-  if (nk.phun.length || !nk.yeuCau) trangBang(wb, 'NK phun', null, [{ h: 'Thời gian', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Người thực hiện', w: 18 }, { h: 'Loại phun', w: 16 }, { h: 'Hóa chất (PL01)', w: 28 }, { h: 'Ngoài danh mục', w: 18 }, { h: 'Khung giờ', w: 10 }, { h: 'Ghi chú', w: 24 }, { h: 'GPS', w: 24 }, { h: 'Ảnh', w: 12 }, { h: 'Vùng định vị', w: 16 }, { h: 'Cách gửi', w: 18 }],
-    nk.phun.map(x => x.slice(0, 9).concat([linkAnh(x[9]), x[10], x[11]])), { to: row => row[5] || row[6] ? XL.do : null });
-  if (nk.coMat.length || !nk.yeuCau) trangBang(wb, 'NK điểm danh', null, [{ h: 'Thời gian', w: 18 }, { h: 'Người', w: 22 }, { h: 'GPS', w: 26 }, { h: 'Ảnh', w: 12 }, { h: 'Vùng định vị', w: 16 }, { h: 'Cách gửi', w: 18 }],
-    nk.coMat.map(x => x.slice(0, 3).concat([linkAnh(x[3]), x[4], x[5]])));
-  if (nk.yeuCau && nk.yeuCau.length) trangBang(wb, 'Yêu cầu phát sinh', null, [{ h: 'Mã', w: 13 }, { h: 'Thời gian tạo', w: 18 }, { h: 'Người tạo', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Vị trí', w: 18 }, { h: 'Loại', w: 12 }, { h: 'Mô tả', w: 36 }, { h: 'Hạn có mặt', w: 18 }, { h: 'Có mặt lúc', w: 18 }, { h: 'Xử lý xong', w: 18 }, { h: 'Nội dung xử lý', w: 26 }, { h: 'Xác nhận', w: 18 }, { h: 'Trạng thái', w: 13 }, { h: 'Trễ hạn', w: 8, c: 1 }, { h: 'Lần chưa đạt', w: 9, c: 1 }, { h: 'Ảnh', w: 12 }],
-    nk.yeuCau.map(x => x.slice(0, 15).concat([linkAnh(x[15])])), { to: row => row[13] === 'Có' ? XL.do : null });
+/* ---- Ảnh thu nhỏ chèn thẳng vào file Excel (xem được cả khi mạng chặn Google) ---- */
+let XL_ANH = LS.get('kct_xlanh') !== '0';
+const ANH_TOI_DA = 500;
+function datXlAnh(v) { XL_ANH = !!v; LS.set('kct_xlanh', XL_ANH ? '1' : '0'); document.querySelectorAll('.xlAnh').forEach(c => c.checked = XL_ANH); }
+function oXlAnh() { return `<label class="row" style="font-weight:400;gap:6px"><input type="checkbox" class="xlAnh" ${XL_ANH ? 'checked' : ''} onchange="datXlAnh(this.checked)"> Kèm ảnh trong Excel</label>`; }
+function idsAnh(s, n) { return String(s || '').split(',').map(x => x.trim()).filter(Boolean).slice(0, n || 1); }
+function thuNho(b64) {
+  return new Promise((ok, loi) => {
+    const im = new Image();
+    im.onload = () => { const k = Math.min(1, 360 / Math.max(im.width, im.height)); const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.width * k)); c.height = Math.max(1, Math.round(im.height * k)); const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height); ok({ b64: c.toDataURL('image/jpeg', 0.72), w: c.width, h: c.height }); };
+    im.onerror = loi; im.src = 'data:image/jpeg;base64,' + b64;
+  });
 }
+/** Tải ảnh thu nhỏ từ máy chủ (20 ảnh/lần), trả {id: {b64,w,h}} */
+async function taiAnhNho(ds) {
+  const ids = [...new Set(ds.filter(Boolean))];
+  const lay = ids.slice(0, ANH_TOI_DA), out = {};
+  for (let i = 0; i < lay.length; i += 20) {
+    toast(`Đang tải ảnh ${Math.min(i + 20, lay.length)}/${lay.length}…`);
+    const r = await call('anhNho', { ids: lay.slice(i, i + 20) }, true);
+    if (!r) { if (LOI_MANG) throw new Error('Mất mạng khi tải ảnh – thử lại hoặc bỏ chọn "Kèm ảnh"'); continue; }
+    for (const id of Object.keys(r)) { try { out[id] = await thuNho(r[id]); } catch (e) { /* ảnh hỏng */ } }
+  }
+  out._tong = ids.length; out._lay = lay.length;
+  return out;
+}
+/** Thêm cột ảnh vào trang: dsIds[i] = các id ảnh của dòng dữ liệu thứ i (bắt đầu ở dongDau) */
+function chenAnh(wb, ws, dsIds, dongDau, cotDau, soCot, ANH) {
+  for (let j = 0; j < soCot; j++) ws.getColumn(cotDau + j).width = 19;
+  dsIds.forEach((ids, i) => {
+    const r = dongDau + i; let co = false;
+    ids.slice(0, soCot).forEach((id, j) => {
+      const a = ANH[id]; if (!a) return;
+      const k = Math.min(128 / a.w, 90 / a.h);
+      ws.addImage(wb.addImage({ base64: a.b64, extension: 'jpeg' }), { tl: { col: cotDau - 1 + j + 0.04, row: r - 1 + 0.04 }, ext: { width: Math.round(a.w * k), height: Math.round(a.h * k) }, editAs: 'oneCell' });
+      co = true;
+    });
+    if (co) ws.getRow(r).height = 72;
+  });
+}
+/** id ảnh của các trang nhật ký (để tải trước) */
+function idsNK(nk) {
+  return [].concat(nk.tram.map(x => idsAnh(x[12], 1)), nk.khu.map(x => idsAnh(x[10], 1)), nk.phun.map(x => idsAnh(x[9], 2)), nk.coMat.map(x => idsAnh(x[3], 1)), (nk.yeuCau || []).map(x => idsAnh(x[15], 2))).flat();
+}
+/** Các trang nhật ký chi tiết trong file Excel (dùng chung cho báo cáo tháng và xuất dữ liệu) */
+function themNK(wb, nk, ANH) {
+  const cA = n => ANH ? Array.from({ length: n }, (_, i) => ({ h: n > 1 ? 'Ảnh ' + (i + 1) : 'Ảnh chụp', w: 19 })) : [];
+  const dA = n => ANH ? Array(n).fill('') : [];
+  const trang = (ten, cols, rows, ids, n, tuyChon) => {
+    const ws = trangBang(wb, ten, null, cols.concat(cA(n)), rows.map(r => r.concat(dA(n))), tuyChon);
+    if (ANH) chenAnh(wb, ws, ids, 2, cols.length + 1, n, ANH);
+  };
+  if (nk.tram.length || !nk.yeuCau) trang('NK kiểm tra trạm', [{ h: 'Thời gian', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Trạm', w: 10 }, { h: 'Người thực hiện', w: 18 }, { h: 'Cách ghi', w: 9 }, { h: 'Tình trạng bả', w: 12 }, { h: 'Thay bả', w: 8, c: 1 }, { h: 'Dấu hiệu', w: 18 }, { h: 'Tình trạng trạm', w: 13 }, { h: 'Ghi chú', w: 24 }, { h: 'Vùng định vị', w: 16 }, { h: 'GPS', w: 24 }, { h: 'Link ảnh', w: 12 }, { h: 'Cách gửi', w: 18 }],
+    nk.tram.map(x => x.slice(0, 12).concat([linkAnh(x[12]), x[13]])), nk.tram.map(x => idsAnh(x[12], 1)), 1, { to: row => row[4] === 'Nhập tay' ? XL.cam : null });
+  if (nk.khu.length || !nk.yeuCau) trang('NK kiểm tra khu', [{ h: 'Thời gian', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Người thực hiện', w: 18 }, { h: 'Cách ghi', w: 9 }, { h: 'Côn trùng', w: 11 }, { h: 'Rắn', w: 12 }, { h: 'Xác chuột', w: 8, c: 1 }, { h: 'Đã xử lý', w: 26 }, { h: 'Ghi chú', w: 26 }, { h: 'GPS', w: 24 }, { h: 'Link ảnh', w: 12 }, { h: 'Vùng định vị', w: 16 }, { h: 'Cách gửi', w: 18 }],
+    nk.khu.map(x => x.slice(0, 10).concat([linkAnh(x[10]), x[11], x[12]])), nk.khu.map(x => idsAnh(x[10], 1)), 1);
+  if (nk.phun.length || !nk.yeuCau) trang('NK phun', [{ h: 'Thời gian', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Người thực hiện', w: 18 }, { h: 'Loại phun', w: 16 }, { h: 'Hóa chất (PL01)', w: 28 }, { h: 'Ngoài danh mục', w: 18 }, { h: 'Khung giờ', w: 10 }, { h: 'Ghi chú', w: 24 }, { h: 'GPS', w: 24 }, { h: 'Link ảnh', w: 12 }, { h: 'Vùng định vị', w: 16 }, { h: 'Cách gửi', w: 18 }],
+    nk.phun.map(x => x.slice(0, 9).concat([linkAnh(x[9]), x[10], x[11]])), nk.phun.map(x => idsAnh(x[9], 2)), 2, { to: row => row[5] || row[6] ? XL.do : null });
+  if (nk.coMat.length || !nk.yeuCau) trang('NK điểm danh', [{ h: 'Thời gian', w: 18 }, { h: 'Người', w: 22 }, { h: 'GPS', w: 26 }, { h: 'Link ảnh', w: 12 }, { h: 'Vùng định vị', w: 16 }, { h: 'Cách gửi', w: 18 }],
+    nk.coMat.map(x => x.slice(0, 3).concat([linkAnh(x[3]), x[4], x[5]])), nk.coMat.map(x => idsAnh(x[3], 1)), 1);
+  if (nk.yeuCau && nk.yeuCau.length) trang('Yêu cầu phát sinh', [{ h: 'Mã', w: 13 }, { h: 'Thời gian tạo', w: 18 }, { h: 'Người tạo', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Vị trí', w: 18 }, { h: 'Loại', w: 12 }, { h: 'Mô tả', w: 36 }, { h: 'Hạn có mặt', w: 18 }, { h: 'Có mặt lúc', w: 18 }, { h: 'Xử lý xong', w: 18 }, { h: 'Nội dung xử lý', w: 26 }, { h: 'Xác nhận', w: 18 }, { h: 'Trạng thái', w: 13 }, { h: 'Trễ hạn', w: 8, c: 1 }, { h: 'Lần chưa đạt', w: 9, c: 1 }, { h: 'Link ảnh', w: 12 }],
+    nk.yeuCau.map(x => x.slice(0, 15).concat([linkAnh(x[15])])), nk.yeuCau.map(x => idsAnh(x[15], 2)), 2, { to: row => row[13] === 'Có' ? XL.do : null });
+}
+function ghiChuAnh(ANH) { return !ANH ? 'Không kèm ảnh – cột "Link ảnh" mở ảnh gốc trên Google Drive (cần mạng vào được Google).' : `Đã chèn ${Object.keys(ANH).filter(k => k[0] !== '_').length} ảnh thu nhỏ trực tiếp vào file (xem được không cần mạng)${ANH._tong > ANH._lay ? `; còn ${ANH._tong - ANH._lay} ảnh vượt giới hạn ${ANH_TOI_DA} ảnh/lần chỉ có link – chọn khoảng ngày ngắn hơn để chèn đủ` : ''}. Ảnh gốc độ nét cao: cột "Link ảnh".`; }
 
 /* ================= NGƯỜI DÙNG ================= */
 const TAB_TEN = [['CongViec', 'Công việc', 'Sửa: NCC điểm danh, quét trạm, phun, xử lý phát sinh; Bên A tạo & xác nhận yêu cầu'], ['Lich', 'Lịch', 'Sửa: nhập / sửa lịch, tải Excel'], ['KhuVuc', 'Khu vực', 'Sửa: thêm/sửa/xóa khu, trạm, in QR'], ['BaoCao', 'Báo cáo', 'Sửa: thêm/bỏ qua lỗi, duyệt giải trình'], ['CaiDat', 'Cài đặt', 'Sửa: tài khoản, hợp đồng, tỷ trọng, lỗi tiền, thời gian, vùng']];
@@ -2336,6 +2403,100 @@ async function luuUser(b, moi) {
   if (r) goBack();
 }
 
+/* ================= THÔNG BÁO ĐẨY (OneSignal) – CÔNG VIỆC PHÁT SINH ================= */
+let OS_SAN = null, OS_OBJ = null;
+function osHoTro() { return 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window; }
+function osCo() { return !!(APP && APP.cfg && APP.cfg.OS_AppId); }
+function laIOS() { return /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+function laAppMH() { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } }
+function quyenTB() { return osHoTro() ? Notification.permission : 'khong'; }
+/** Tải và khởi động OneSignal (dùng chung service worker sw.js của app) */
+function napOS() {
+  if (OS_SAN) return OS_SAN;
+  OS_SAN = new Promise((ok, loi) => {
+    const het = setTimeout(() => { OS_SAN = null; loi(new Error('Không kết nối được máy chủ thông báo (mạng chặn hoặc chậm) – thử lại bằng 4G')); }, 20000);
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    const goc = location.pathname.replace(/[^/]*$/, '');
+    window.OneSignalDeferred.push(async OS => {
+      try {
+        await OS.init({ appId: APP.cfg.OS_AppId, serviceWorkerPath: goc.slice(1) + 'sw.js', serviceWorkerParam: { scope: goc }, allowLocalhostAsSecureOrigin: true });
+        clearTimeout(het); OS_OBJ = OS; ok(OS);
+      } catch (e) { clearTimeout(het); OS_SAN = null; loi(e); }
+    });
+    if (!document.getElementById('osSdk')) {
+      const sc = document.createElement('script'); sc.id = 'osSdk'; sc.defer = true;
+      sc.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
+      sc.onerror = () => { clearTimeout(het); OS_SAN = null; sc.remove(); loi(new Error('Không tải được bộ thông báo OneSignal (mạng chặn?)')); };
+      document.head.appendChild(sc);
+    }
+  });
+  return OS_SAN;
+}
+/** Gắn máy này với tài khoản đang đăng nhập để máy chủ gửi đúng người */
+async function osGanUser() { const OS = await napOS(); await OS.login(APP.user.ten); return OS; }
+function osTuDong() { if (osCo() && osHoTro() && Notification.permission === 'granted' && !OFFLINE) osGanUser().catch(() => {}); }
+async function batThongBao(b) {
+  if (!osCo()) return toast('Quản trị chưa khai báo OneSignal trong Cài đặt › Thông báo đẩy', 'err');
+  if (laIOS() && !laAppMH()) { go('thongBao'); return toast('iPhone: cần "Thêm vào MH chính" rồi mở app từ màn hình chính', 'err'); }
+  if (!osHoTro()) return toast('Trình duyệt này không hỗ trợ thông báo – dùng Chrome (Android) hoặc Safari 16.4+ (iPhone)', 'err');
+  if (b) b.disabled = true;
+  try {
+    const OS = await osGanUser();
+    if (Notification.permission !== 'granted') await OS.Notifications.requestPermission();
+    if (Notification.permission !== 'granted') throw new Error(Notification.permission === 'denied' ? 'Máy đang CHẶN thông báo của app – xem hướng dẫn mở lại bên dưới' : 'Chưa cho phép thông báo');
+    await OS.User.PushSubscription.optIn();
+    toast('✓ Đã bật thông báo trên máy này');
+  } catch (e) { toast(e.message || String(e), 'err'); }
+  if (b) b.disabled = false;
+  if (CUR && ['thongBao', 'home'].includes(CUR.fn)) PAGES[CUR.fn]();
+}
+function tbBanner() {
+  if (!osCo() || !osHoTro() || Notification.permission !== 'default' || LS.get('kct_tb_an') === '1') return '';
+  if (!(q('ThucHien') || q('TaoYeuCau'))) return '';
+  return `<div class="alert row sb" style="gap:8px"><span>🔔 Bật thông báo để biết ngay khi có <b>công việc phát sinh</b></span><span class="row" style="gap:6px"><button class="btn btn-s" onclick="batThongBao(this)">Bật</button><button class="btn btn-o btn-s" onclick="LS.set('kct_tb_an','1');this.closest('.alert').remove()">✕</button></span></div>`;
+}
+function veTBMay() {
+  const e = $('#tbMay'); if (!e) return;
+  const p = quyenTB();
+  let s = '<div class="grp" style="margin-top:0">Máy này</div><div class="card">';
+  if (!osCo()) s += `<b>Chưa sẵn sàng</b><div class="muted">Quản trị cần khai báo OneSignal App ID & REST API Key ở phần dưới.</div>`;
+  else if (laIOS() && !laAppMH()) s += `<b>iPhone / iPad: cần cài app ra màn hình chính</b><ol style="margin:6px 0 0 18px;padding:0;line-height:1.6"><li>Mở app bằng <b>Safari</b> (iOS 16.4 trở lên)</li><li>Bấm nút <b>Chia sẻ</b> (ô vuông có mũi tên lên)</li><li>Chọn <b>Thêm vào MH chính</b> → Thêm</li><li>Mở app từ biểu tượng mới trên màn hình chính, đăng nhập, vào lại mục này và bấm <b>Bật thông báo</b></li></ol>`;
+  else if (!osHoTro()) s += `<b>Trình duyệt không hỗ trợ</b><div class="muted">Android: dùng Chrome. iPhone: Safari, iOS 16.4 trở lên, cài ra màn hình chính.</div>`;
+  else if (p === 'granted') s += `<div class="row sb"><b>✅ Đang bật trên máy này</b><button class="btn btn-o btn-s" onclick="thuTB(this)">Gửi thử</button></div><div class="muted">Tài khoản: ${h(APP.user.ten)}. Đăng xuất thì máy này thôi nhận thông báo của tài khoản.</div>`;
+  else if (p === 'denied') s += `<b style="color:var(--red)">⛔ Máy đang chặn thông báo của app</b><div class="muted" style="margin-top:4px">${laIOS() ? 'Cài đặt iPhone › Thông báo › KS côn trùng › bật Cho phép thông báo.' : 'Chrome: bấm biểu tượng 🔒 / ⓘ cạnh địa chỉ web › Quyền › Thông báo › Cho phép (hoặc Cài đặt Android › Ứng dụng › Chrome › Thông báo). Sau đó tải lại app.'}</div><button class="btn btn-block" style="margin-top:8px" onclick="batThongBao(this)">Thử lại</button>`;
+  else s += `<b>Chưa bật</b><div class="muted">Bấm nút dưới, sau đó chọn <b>Cho phép</b> khi điện thoại hỏi.</div><button class="btn btn-block big" style="margin-top:8px" onclick="batThongBao(this)">🔔 Bật thông báo trên máy này</button>`;
+  s += '</div>';
+  s += `<div class="card"><b>Sẽ báo khi</b><ul style="margin:6px 0 0 18px;padding:0;line-height:1.6">
+    <li><b>NCC</b>: có yêu cầu phát sinh mới · sắp đến hạn có mặt · quá hạn chưa có mặt · Bên A trả lại (chưa đạt) / xác nhận hoàn thành / hủy</li>
+    <li><b>Người tạo yêu cầu</b>: NCC đã nhận · đã có mặt · báo xử lý xong (chờ bạn xác nhận) · quá hạn chưa có mặt</li></ul>
+    <div class="muted" style="margin-top:6px">Bấm vào thông báo sẽ mở thẳng yêu cầu đó. Thông báo cần mạng vào được Google/OneSignal (4G hoặc wifi ngoài).</div></div>`;
+  e.innerHTML = s;
+}
+PAGES.thongBao = async function () {
+  setTitle('Thông báo đẩy');
+  main(`<div id="tbMay"></div><div id="tbCfg"></div>`);
+  veTBMay();
+  if (!xemCD()) return;
+  $('#tbCfg').innerHTML = '<div class="muted">Đang tải cấu hình…</div>';
+  const me = CUR; const r = await call('dsThongBao', {}, true); if (!r || me !== CUR) return;
+  const sua = q('QuanTri'), d = sua ? '' : 'disabled';
+  $('#tbCfg').innerHTML = `<div class="grp">Kết nối OneSignal (quản trị)</div><div class="card">
+    <div class="fld"><label>OneSignal App ID</label><input id="osA" value="${h(r.appId)}" ${d} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocapitalize="off"></div>
+    <div class="fld"><label>App API Key (REST API Key) ${r.coKey ? `<span class="tag t-ok">đã lưu …${h(r.duoiKey)}</span>` : '<span class="tag t-warn">chưa có</span>'}</label><input id="osK" type="password" ${d} placeholder="${r.coKey ? 'Để trống = giữ khóa đang lưu' : 'Dán khóa vào đây'}" autocomplete="new-password"></div>
+    <div class="fld"><label>Địa chỉ app (link GitHub Pages – để bấm thông báo mở đúng app)</label><input id="osU" value="${h(r.url || (location.origin + location.pathname))}" ${d}></div>
+    <div class="fld"><label>Nhắc NCC trước hạn có mặt (phút, 0 = không nhắc)</label><input id="osN" type="number" min="0" max="240" value="${h(r.nhac)}" ${d} inputmode="numeric"></div>
+    ${sua ? `<button class="btn btn-block" onclick="luuTB(this)">💾 Lưu</button>` : ''}
+    <div class="muted" style="margin-top:8px">Khóa API chỉ lưu trên máy chủ (Google Sheet), không gửi xuống điện thoại.</div></div>`;
+};
+async function luuTB(b) {
+  const r = await gui(b, 'luuThongBao', { appId: $('#osA').value, restKey: $('#osK').value, url: $('#osU').value, nhac: $('#osN').value }, 'Đã lưu');
+  if (r) { await taiLaiDanhMuc(); OS_SAN = null; PAGES.thongBao(); }
+}
+async function thuTB(b) {
+  try { await osGanUser(); } catch (e) { /* vẫn thử gửi */ }
+  await gui(b, 'thuThongBao', {}, 'Đã gửi – chờ vài giây xem thông báo hiện trên máy');
+}
+
 /* ================= TÀI KHOẢN ================= */
 PAGES.acc = function () {
   setTitle('Tài khoản');
@@ -2347,7 +2508,7 @@ PAGES.acc = function () {
     <button class="btn btn-ro btn-block" onclick="dangXuat()">Đăng xuất</button>`);
 };
 async function doiMK(b) { const r = await gui(b, 'doiMatKhau', { cu: $('#mc').value, moi: $('#mm').value }, 'Đã đổi mật khẩu – các máy khác sẽ phải đăng nhập lại'); if (r) { TOKEN = r.token; if (LS.get('kct_token')) LS.set('kct_token', TOKEN); $('#mc').value = ''; $('#mm').value = ''; } }
-function dangXuat() { TOKEN = ''; LS.del('kct_token'); LS.del('kct_app'); OFFLINE = false; BADGE_YC = 0; if (GPS_WATCH !== null && navigator.geolocation) navigator.geolocation.clearWatch(GPS_WATCH); GPS_WATCH = null; renderLogin(); }
+function dangXuat() { try { if (OS_OBJ) OS_OBJ.logout(); } catch (e) {} TOKEN = ''; LS.del('kct_token'); LS.del('kct_app'); OFFLINE = false; BADGE_YC = 0; if (GPS_WATCH !== null && navigator.geolocation) navigator.geolocation.clearWatch(GPS_WATCH); GPS_WATCH = null; renderLogin(); }
 
 start();
 </script>

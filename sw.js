@@ -2,7 +2,9 @@
    - Trang app (index.html): lấy bản mới khi có mạng, mất mạng thì dùng bản đã lưu.
    - Thư viện (QR, Excel): lưu lần đầu rồi dùng lại.
    - Máy chủ dữ liệu (Google) và ảnh: không lưu. */
-const BAN = 'kct-v3';
+/* Thông báo đẩy OneSignal dùng chung service worker này (mạng chặn thì bỏ qua, app vẫn chạy offline) */
+try { importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js'); } catch (e) { /* không tải được OneSignal */ }
+const BAN = 'kct-v4';
 const THU_VIEN = [
   'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
   'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'
@@ -11,7 +13,7 @@ const THU_VIEN = [
 self.addEventListener('install', e => {
   self.skipWaiting();
   e.waitUntil(caches.open(BAN).then(c => Promise.all(
-    ['./', './index.html'].concat(THU_VIEN).map(u => c.add(u).catch(() => {}))
+    ['./', './index.html', './manifest.json', './icon-192.png'].concat(THU_VIEN).map(u => c.add(u).catch(() => {}))
   )));
 });
 
@@ -25,7 +27,7 @@ self.addEventListener('fetch', e => {
   const r = e.request;
   if (r.method !== 'GET') return;
   const u = new URL(r.url);
-  if (/(^|\.)google\.com$|googleusercontent\.com$|googleapis\.com$/.test(u.hostname)) return;
+  if (/(^|\.)google\.com$|googleusercontent\.com$|googleapis\.com$|onesignal\.com$/.test(u.hostname)) return;
 
   if (u.origin === self.location.origin) {
     e.respondWith(
