@@ -197,6 +197,10 @@ details.in-step summary{padding:6px 0;color:var(--g);font-weight:600}
   .tem-t b{font-size:12pt}
   .tem .s{font-size:7.5pt;color:#444}
 }
+table.lich td.k,table.lich th.k{width:128px;min-width:128px;max-width:128px}
+table.lich td.dm,table.lich th.dm{width:44px;min-width:44px;max-width:44px;font-size:12px;text-align:center;background:#fbfdfb;white-space:nowrap;position:sticky;z-index:1}
+table.lich th.dm{background:#f0f5f2;z-index:2}
+table.lich .dm1{left:128px}table.lich .dm2{left:172px;box-shadow:2px 0 3px rgba(0,0,0,.08)}
 </style>
 </head>
 <body>
@@ -279,7 +283,7 @@ function thumbs(ids) {
 }
 
 /* ---------------- điều hướng ---------------- */
-const PHIEN_BAN = '02/11/2026 (d)';
+const PHIEN_BAN = '02/11/2026 (e)';
 const PAGES = {};
 let NAV_ON = 'home', BADGE_YC = 0, DD_TIEP = null;
 function go(fn, args, push = true) {
@@ -1208,7 +1212,15 @@ PAGES.lich = async function (thang) {
       <label class="ddl"><input type="file" accept=".xlsx" hidden onchange="nhapLichExcel(this)">⬆ Nhập lịch từ file Excel</label></div></div>` : ''}</div>
     <div class="seg"><button id="sgN" class="${LICH_CHE === 'ngay' ? 'on' : ''}" onclick="LICH_CHE='ngay';veLich()">Theo ngày</button><button id="sgT" class="${LICH_CHE === 'bang' ? 'on' : ''}" onclick="LICH_CHE='bang';veLich()">Cả tháng</button></div>
     <div id="lnhap"></div><div id="lb" class="muted">Đang tải…</div><div id="lsave"></div>`);
-  const me = CUR; const r = await call('layLich', { thang }, true); if (!r || me !== CUR || !$('#lb')) return;
+  if (!LICH || LICH.thang !== thang) LICH = null;
+  const me = CUR, k = 'lich_' + thang;
+  let r = OFFLINE ? null : await call('layLich', { thang }, true, true);
+  if (me !== CUR || !$('#lb')) return;
+  if (r) cSet(k, r); else r = cGet(k);
+  if (!r) {
+    $('#lb').innerHTML = `<div class="alert err">Chưa tải được lịch tháng ${thang.slice(5)}/${thang.slice(0, 4)}: ${h(OFFLINE || LOI_MANG ? 'mất mạng hoặc mạng đang chặn Google' : LOI_CUOI || 'lỗi máy chủ')}.<br><small>Nếu vừa cập nhật Code.gs: mở Apps Script, chạy lại hàm caiDat (bấm Cho phép) rồi Triển khai phiên bản mới.</small></div><button class="btn btn-block" onclick="PAGES.lich('${thang}')">Thử lại</button>`;
+    return;
+  }
   const map = {};
   r.entries.forEach(e => { map[e.maKhu] = map[e.maKhu] || {}; map[e.maKhu][e.ngay] = (map[e.maKhu][e.ngay] || '') + e.loai; });
   Object.keys(map).forEach(k => Object.keys(map[k]).forEach(d => { map[k][d] = ['K', 'P', 'S'].filter(c => map[k][d].includes(c)).join(''); }));
@@ -1223,6 +1235,7 @@ function ngayThang(thang) {
   return out;
 }
 function veLich(canhBao) {
+  if (!LICH || !$('#lb')) return;
   if (canhBao !== undefined) LICH.cb = canhBao;
   if ($('#sgN')) { $('#sgN').className = LICH_CHE === 'ngay' ? 'on' : ''; $('#sgT').className = LICH_CHE === 'bang' ? 'on' : ''; }
   let s = LICH_CHE === 'bang' ? veLichBang() : veLichNgay();
@@ -1267,20 +1280,50 @@ function batO(ma, ds, c) {
   if (v) map[ma][ds] = v; else delete map[ma][ds];
   LICH_DOI = true; veLich();
 }
+/** Định mức theo hợp đồng (khai báo ở tab Khu vực) và số lượt đã xếp lịch trong tháng */
+function dmLich(k, thang) {
+  const m = +thang.slice(5, 7), cuoiQuy = m % 3 === 0;
+  return { canK: (+k.kt || 0) * soTuanThang(thang), canP: (+k.pt || 0) + (+k.sa || 0) + (cuoiQuy ? (+k.pq || 0) : 0) };
+}
+function demLichKhu(ma) {
+  const v = Object.values((LICH.map || {})[ma] || {}).join('');
+  return { K: (v.match(/K/g) || []).length, P: (v.match(/[PS]/g) || []).length };
+}
+function oDM(co, can) {
+  if (!can && !co) return '<span class="muted">–</span>';
+  return `<b style="color:${co >= can ? 'var(--g)' : 'var(--red)'}">${co}/${can}</b>`;
+}
+function capNhatDM(ma) {
+  const k = APP.khu.find(x => x.ma === ma); if (!k) return;
+  const dm = dmLich(k, LICH.thang), d = demLichKhu(ma);
+  const a = document.getElementById('dmK_' + ma), b = document.getElementById('dmP_' + ma);
+  if (a) a.innerHTML = oDM(d.K, dm.canK); if (b) b.innerHTML = oDM(d.P, dm.canP);
+  veTongDM();
+}
+function veTongDM() {
+  let cK = 0, dK = 0, cP = 0, dP = 0, thieu = 0;
+  APP.khu.forEach(k => { const dm = dmLich(k, LICH.thang), d = demLichKhu(k.ma); cK += dm.canK; dK += d.K; cP += dm.canP; dP += d.P; if (d.K < dm.canK || d.P < dm.canP) thieu++; });
+  const e = document.getElementById('dmTong');
+  if (e) e.innerHTML = `<span class="tag ${dK >= cK ? 't-ok' : 't-bad'}">Kiểm tra ${dK}/${cK}</span><span class="tag ${dP >= cP ? 't-ok' : 't-bad'}">Phun + sả ${dP}/${cP}</span><span class="tag ${thieu ? 't-bad' : 't-ok'}">${thieu ? thieu + ' khu xếp thiếu' : 'Đủ định mức'}</span>`;
+}
 function veLichBang() {
   const { thang, map } = LICH;
   const days = ngayThang(thang), n = days.length;
   const ed = q('NhapLich');
   let s = `<div class="muted" style="margin-bottom:6px"><b class="cK">K</b> kiểm tra · <b class="cP">P</b> phun định kỳ · <b class="cS">S</b> tinh dầu sả${ed ? ' · chạm ô để đổi' : ''} · vuốt ngang để xem hết tháng</div>`;
-  s += `<div class="tbl-wrap"><table class="lich"><thead><tr><th class="k" style="position:sticky;left:0;z-index:2;background:#f0f5f2">Khu</th>${days.map(d => `<th class="${d.cn ? 'cn' : ''}">${d.t}<br>${d.i}</th>`).join('')}</tr></thead><tbody>`;
+  const tq = soTuanThang(thang), cq = +thang.slice(5, 7) % 3 === 0;
+  s += `<div class="tags" id="dmTong" style="margin-bottom:4px"></div><div class="muted" style="margin-bottom:6px">Cột <b>KT/HĐ</b> = số lần kiểm tra đã xếp / định mức (lần/tuần × ${tq} tuần). Cột <b>Phun/HĐ</b> = phun định kỳ + tinh dầu sả${cq ? ' + phun quý (tháng cuối quý)' : ''} đã xếp / định mức. Định mức lấy ở tab Khu vực.</div>`;
+  s += `<div class="tbl-wrap"><table class="lich"><thead><tr><th class="k" style="position:sticky;left:0;z-index:2;background:#f0f5f2">Khu</th><th class="dm dm1">KT/<br>HĐ</th><th class="dm dm2">Phun/<br>HĐ</th>${days.map(d => `<th class="${d.cn ? 'cn' : ''}">${d.t}<br>${d.i}</th>`).join('')}</tr></thead><tbody>`;
   let nhomCu = '';
   APP.khu.forEach(k => {
-    if (k.nhom !== nhomCu) { s += `<tr><td class="k" style="background:#f7faf8"><b>${h(k.nhom)}</b></td><td colspan="${n}" style="background:#f7faf8"></td></tr>`; nhomCu = k.nhom; }
-    s += `<tr><td class="k" title="${h(k.ten)}"><b>${k.ma}</b> ${h(k.ten)}</td>` + days.map(d => {
+    if (k.nhom !== nhomCu) { s += `<tr><td class="k" style="background:#f7faf8"><b>${h(k.nhom)}</b></td><td colspan="${n + 2}" style="background:#f7faf8"></td></tr>`; nhomCu = k.nhom; }
+    const dm = dmLich(k, thang), dd = demLichKhu(k.ma);
+    s += `<tr><td class="k" title="${h(k.ten)}"><b>${k.ma}</b> ${h(k.ten)}</td><td class="dm dm1" id="dmK_${k.ma}">${oDM(dd.K, dm.canK)}</td><td class="dm dm2" id="dmP_${k.ma}">${oDM(dd.P, dm.canP)}</td>` + days.map(d => {
       const v = (map[k.ma] || {})[d.ds] || '';
       return `<td class="${d.cn ? 'cn' : ''} ${ed ? 'ed' : ''}" ${ed ? `onclick="doiO(this,'${k.ma}','${d.ds}')"` : ''}>${oLich(v)}</td>`;
     }).join('') + '</tr>';
   });
+  setTimeout(veTongDM, 0);
   return s + '</tbody></table></div>';
 }
 function oLich(v) { return v.split('').map(c => `<span class="c${c}">${c}</span>`).join(''); }
@@ -1290,6 +1333,7 @@ function doiO(td, ma, ds) {
   const nx = VONG[(VONG.indexOf(v) + 1) % VONG.length];
   if (nx) map[ma][ds] = nx; else delete map[ma][ds];
   td.innerHTML = oLich(nx);
+  capNhatDM(ma);
   if (!LICH_DOI) { LICH_DOI = true; $('#lsave').innerHTML = `<div class="savebar"><span>Lịch đã thay đổi</span><button class="btn btn-o btn-s" onclick="PAGES.lich(LICH.thang)">Bỏ</button><button class="btn btn-s" onclick="luuLich(this)">💾 Lưu lịch</button></div>`; }
 }
 async function luuLich(b) {
