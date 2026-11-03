@@ -283,7 +283,7 @@ function thumbs(ids) {
 }
 
 /* ---------------- điều hướng ---------------- */
-const PHIEN_BAN = '03/11/2026 (e)';
+const PHIEN_BAN = '03/11/2026 (f)';
 const PAGES = {};
 let NAV_ON = 'home', BADGE_YC = 0, DD_TIEP = null;
 function go(fn, args, push = true) {
@@ -2157,7 +2157,7 @@ async function xuatExcel(b) {
     const r = await call('baoCao', { thang, moi: true }); if (!r || !r.nt) throw new Error('Không lấy được báo cáo');
     const nk = await call('nhatKyThang', { thang }); if (!nk) throw new Error('Không lấy được nhật ký');
     BC = r;
-    const ANH = XL_ANH ? await taiAnhNho(r.nt.giaiTrinh.map(x => idsAnh(x.anh, 1)).flat().concat(idsNK(nk))) : null;
+    const ANH = XL_ANH ? await taiAnhNho(r.nt.giaiTrinh.map(x => idsAnh(x.anh, 1)).flat().concat(r.yeuCau.map(y => [idsAnh(y.anhTao, 1)[0], idsAnh(y.anhCoMat, 1)[0], idsAnh(y.anhXuLy, 1)[0]]).flat(), idsNK(nk)).filter(Boolean)) : null;
     const n = r.nt, cb = r.canhBao, nhanThang = thang.slice(5) + '/' + thang.slice(0, 4), T = '#,##0';
     const wb = new ExcelJS.Workbook(); wb.creator = APP.user.hoTen; wb.created = new Date();
 
@@ -2208,11 +2208,12 @@ async function xuatExcel(b) {
       { to: row => row[10] === 'Áp dụng' ? XL.do : null });
 
     // 5. Giải trình
-    const gtCols = [{ h: 'Thời gian', w: 17 }, { h: 'Loại', w: 16 }, { h: 'Đối tượng', w: 12 }, { h: 'Người', w: 18 }, { h: 'Cảnh báo', w: 34 }, { h: 'Giải trình', w: 44 }, { h: 'Kết quả duyệt', w: 14 }, { h: 'Người duyệt', w: 22 }, { h: 'Link ảnh', w: 12 }];
-    const wsG = trangBang(wb, 'Giải trình', 'CẢNH BÁO VỊ TRÍ / ẢNH VÀ GIẢI TRÌNH – THÁNG ' + nhanThang, gtCols.concat(ANH ? [{ h: 'Ảnh chụp', w: 19 }] : []),
-      n.giaiTrinh.length ? n.giaiTrinh.map(x => [x.tg, x.loai, x.dt, x.ai, x.canhBao, x.giaiTrinh, x.duyet || 'Chờ duyệt', x.nguoiDuyet, linkAnh(x.anh)].concat(ANH ? [''] : [])) : [['Không có', '', '', '', '', '', '', '', ''].concat(ANH ? [''] : [])],
+    const gtCols = [{ h: 'Thời gian', w: 17 }, { h: 'Loại', w: 16 }, { h: 'Đối tượng', w: 12 }, { h: 'Người', w: 18 }, { h: 'Cảnh báo', w: 34 }, { h: 'Giải trình', w: 44 }, { h: 'Kết quả duyệt', w: 14 }, { h: 'Người duyệt', w: 22 }];
+    const gtIds = n.giaiTrinh.map(x => idsAnh(x.anh, 1));
+    const wsG = trangBang(wb, 'Giải trình', 'CẢNH BÁO VỊ TRÍ / ẢNH VÀ GIẢI TRÌNH – THÁNG ' + nhanThang, gtCols.concat(cotAnh(['Ảnh chụp'], ANH)),
+      n.giaiTrinh.length ? n.giaiTrinh.map((x, i) => [x.tg, x.loai, x.dt, x.ai, x.canhBao, x.giaiTrinh, x.duyet || 'Chờ duyệt', x.nguoiDuyet].concat(dongAnh(gtIds[i], 1, ANH))) : [['Không có', '', '', '', '', '', '', '', '']],
       { to: row => row[6] === 'Không chấp nhận' ? XL.do : row[6] === 'Chờ duyệt' ? XL.cam : null });
-    if (ANH) chenAnh(wb, wsG, n.giaiTrinh.map(x => idsAnh(x.anh, 1)), 4, gtCols.length + 1, 1, ANH);
+    if (ANH) chenAnh(wb, wsG, gtIds, 4, gtCols.length + 1, 1, ANH);
 
     // 6. Kiểm tra theo tuần
     const colsT = [{ h: 'Mã khu', w: 8, c: 1 }, { h: 'Khu vực', w: 44 }, { h: 'Số trạm', w: 8, c: 1 }]
@@ -2228,11 +2229,13 @@ async function xuatExcel(b) {
     }));
     r.khu.forEach((k, i) => k.tuan.forEach((t, j) => { if (!t.tinh) return; const c = wsT.getRow(4 + i).getCell(4 + j); nen(c, t.dat >= t.can ? XL.xanhNhat : t.xong ? XL.do : XL.cam); }));
 
-    // 7. Yêu cầu
-    trangBang(wb, 'Yêu cầu phát sinh', 'YÊU CẦU PHÁT SINH – THÁNG ' + nhanThang,
-      [{ h: 'Mã', w: 13 }, { h: 'Thời gian tạo', w: 17 }, { h: 'Người tạo', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Loại', w: 13 }, { h: 'Mô tả', w: 40 }, { h: 'Hạn có mặt', w: 17 }, { h: 'Có mặt lúc', w: 17 }, { h: 'Xử lý xong', w: 17 }, { h: 'Xác nhận', w: 17 }, { h: 'Trạng thái', w: 13 }, { h: 'Trễ hạn', w: 8, c: 1 }, { h: 'Lần chưa đạt', w: 9, c: 1 }, { h: 'Ảnh', w: 12 }],
-      r.yeuCau.map(y => [y.ma, y.tao, y.tenNguoiTao, y.khu, y.loai, y.moTa, y.han, y.tgCoMat, y.tgXuLy, y.tgXacNhan, y.tt, y.tre ? 'Có' : '', y.traLai || '', linkAnh(y.anhXuLy || y.anhCoMat || y.anhTao)]),
+    // 7. Yêu cầu (kèm 3 ảnh: khi báo · có mặt · sau xử lý)
+    const ycIds = r.yeuCau.map(y => [idsAnh(y.anhTao, 1)[0], idsAnh(y.anhCoMat, 1)[0], idsAnh(y.anhXuLy, 1)[0]]);
+    const ycCols = [{ h: 'Mã', w: 13 }, { h: 'Thời gian tạo', w: 17 }, { h: 'Người tạo', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Loại', w: 13 }, { h: 'Mô tả', w: 40 }, { h: 'Hạn có mặt', w: 17 }, { h: 'Có mặt lúc', w: 17 }, { h: 'Xử lý xong', w: 17 }, { h: 'Xác nhận', w: 17 }, { h: 'Trạng thái', w: 13 }, { h: 'Trễ hạn', w: 8, c: 1 }, { h: 'Lần chưa đạt', w: 9, c: 1 }];
+    const wsY = trangBang(wb, 'Yêu cầu phát sinh', 'YÊU CẦU PHÁT SINH – THÁNG ' + nhanThang, ycCols.concat(cotAnh(['Ảnh khi báo', 'Ảnh có mặt', 'Ảnh sau xử lý'], ANH)),
+      r.yeuCau.map((y, i) => [y.ma, y.tao, y.tenNguoiTao, y.khu, y.loai, y.moTa, y.han, y.tgCoMat, y.tgXuLy, y.tgXacNhan, y.tt, y.tre ? 'Có' : '', y.traLai || ''].concat(dongAnh(ycIds[i], 3, ANH))),
       { to: row => row[11] === 'Có' ? XL.do : null });
+    if (ANH) chenAnh(wb, wsY, ycIds, 4, ycCols.length + 1, 3, ANH);
 
     // 8. Cảnh báo khác
     const dsCB = [];
@@ -2532,7 +2535,7 @@ function chenAnh(wb, ws, dsIds, dongDau, cotDau, soCot, ANH) {
   dsIds.forEach((ids, i) => {
     const r = dongDau + i; let co = false;
     ids.slice(0, soCot).forEach((id, j) => {
-      const a = ANH[id]; if (!a) return;
+      const a = id && ANH[id]; if (!a) return;
       const k = Math.min(128 / a.w, 90 / a.h);
       ws.addImage(wb.addImage({ base64: a.b64, extension: 'jpeg' }), { tl: { col: cotDau - 1 + j + 0.04, row: r - 1 + 0.04 }, ext: { width: Math.round(a.w * k), height: Math.round(a.h * k) }, editAs: 'oneCell' });
       co = true;
@@ -2540,30 +2543,36 @@ function chenAnh(wb, ws, dsIds, dongDau, cotDau, soCot, ANH) {
     if (co) ws.getRow(r).height = 72;
   });
 }
-/** id ảnh của các trang nhật ký (để tải trước) */
-function idsNK(nk) {
-  return [].concat(nk.tram.map(x => idsAnh(x[12], 1)), nk.khu.map(x => idsAnh(x[10], 1)), nk.phun.map(x => idsAnh(x[9], 2)), nk.coMat.map(x => idsAnh(x[3], 1)), (nk.yeuCau || []).map(x => idsAnh(x[15], 2))).flat();
-}
+/** Các trang nhật ký chi tiết trong file Excel (dùng chung cho báo cáo tháng và xuất dữ liệu) */
+/** Ô ảnh: có ảnh thu nhỏ thì để trống (ảnh chèn đè lên ô), chưa chèn được thì để link mở ảnh gốc */
+function oAnh(id, ANH) { return !id ? '' : (ANH && ANH[id]) ? '' : { text: 'Xem ảnh', link: 'https://drive.google.com/file/d/' + id + '/view' }; }
+/** Thêm các cột ảnh vào cuối trang: dsIds[i] = mảng id ảnh của dòng i (mỗi cột 1 ảnh) */
+function cotAnh(tenCot, ANH) { return tenCot.map(t => ({ h: t, w: ANH ? 19 : 11 })); }
+function dongAnh(ids, n, ANH) { return Array.from({ length: n }, (_, i) => oAnh(ids[i], ANH)); }
 /** Các trang nhật ký chi tiết trong file Excel (dùng chung cho báo cáo tháng và xuất dữ liệu) */
 function themNK(wb, nk, ANH) {
-  const cA = n => ANH ? Array.from({ length: n }, (_, i) => ({ h: n > 1 ? 'Ảnh ' + (i + 1) : 'Ảnh chụp', w: 19 })) : [];
-  const dA = n => ANH ? Array(n).fill('') : [];
-  const trang = (ten, cols, rows, ids, n, tuyChon) => {
-    const ws = trangBang(wb, ten, null, cols.concat(cA(n)), rows.map(r => r.concat(dA(n))), tuyChon);
+  const trang = (ten, cols, rows, ids, tenAnh, tuyChon) => {
+    const n = tenAnh.length;
+    const ws = trangBang(wb, ten, null, cols.concat(cotAnh(tenAnh, ANH)), rows.map((r, i) => r.concat(dongAnh(ids[i], n, ANH))), tuyChon);
     if (ANH) chenAnh(wb, ws, ids, 2, cols.length + 1, n, ANH);
   };
-  if (nk.tram.length || !nk.yeuCau) trang('NK kiểm tra trạm', [{ h: 'Thời gian', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Trạm', w: 10 }, { h: 'Người thực hiện', w: 18 }, { h: 'Cách ghi', w: 9 }, { h: 'Tình trạng bả', w: 12 }, { h: 'Thay bả', w: 8, c: 1 }, { h: 'Dấu hiệu', w: 18 }, { h: 'Tình trạng trạm', w: 13 }, { h: 'Ghi chú', w: 24 }, { h: 'Vùng định vị', w: 16 }, { h: 'GPS', w: 24 }, { h: 'Link ảnh', w: 12 }, { h: 'Cách gửi', w: 18 }],
-    nk.tram.map(x => x.slice(0, 12).concat([linkAnh(x[12]), x[13]])), nk.tram.map(x => idsAnh(x[12], 1)), 1, { to: row => row[4] === 'Nhập tay' ? XL.cam : null });
-  if (nk.khu.length || !nk.yeuCau) trang('NK kiểm tra khu', [{ h: 'Thời gian', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Người thực hiện', w: 18 }, { h: 'Cách ghi', w: 9 }, { h: 'Côn trùng', w: 11 }, { h: 'Rắn', w: 12 }, { h: 'Xác chuột', w: 8, c: 1 }, { h: 'Đã xử lý', w: 26 }, { h: 'Ghi chú', w: 26 }, { h: 'GPS', w: 24 }, { h: 'Link ảnh', w: 12 }, { h: 'Vùng định vị', w: 16 }, { h: 'Cách gửi', w: 18 }],
-    nk.khu.map(x => x.slice(0, 10).concat([linkAnh(x[10]), x[11], x[12]])), nk.khu.map(x => idsAnh(x[10], 1)), 1);
-  if (nk.phun.length || !nk.yeuCau) trang('NK phun', [{ h: 'Thời gian', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Người thực hiện', w: 18 }, { h: 'Loại phun', w: 16 }, { h: 'Hóa chất (PL01)', w: 28 }, { h: 'Ngoài danh mục', w: 18 }, { h: 'Khung giờ', w: 10 }, { h: 'Ghi chú', w: 24 }, { h: 'GPS', w: 24 }, { h: 'Link ảnh', w: 12 }, { h: 'Vùng định vị', w: 16 }, { h: 'Cách gửi', w: 18 }],
-    nk.phun.map(x => x.slice(0, 9).concat([linkAnh(x[9]), x[10], x[11]])), nk.phun.map(x => idsAnh(x[9], 2)), 2, { to: row => row[5] || row[6] ? XL.do : null });
-  if (nk.coMat.length || !nk.yeuCau) trang('NK điểm danh', [{ h: 'Thời gian', w: 18 }, { h: 'Người', w: 22 }, { h: 'GPS', w: 26 }, { h: 'Link ảnh', w: 12 }, { h: 'Vùng định vị', w: 16 }, { h: 'Cách gửi', w: 18 }],
-    nk.coMat.map(x => x.slice(0, 3).concat([linkAnh(x[3]), x[4], x[5]])), nk.coMat.map(x => idsAnh(x[3], 1)), 1);
-  if (nk.yeuCau && nk.yeuCau.length) trang('Yêu cầu phát sinh', [{ h: 'Mã', w: 13 }, { h: 'Thời gian tạo', w: 18 }, { h: 'Người tạo', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Vị trí', w: 18 }, { h: 'Loại', w: 12 }, { h: 'Mô tả', w: 36 }, { h: 'Hạn có mặt', w: 18 }, { h: 'Có mặt lúc', w: 18 }, { h: 'Xử lý xong', w: 18 }, { h: 'Nội dung xử lý', w: 26 }, { h: 'Xác nhận', w: 18 }, { h: 'Trạng thái', w: 13 }, { h: 'Trễ hạn', w: 8, c: 1 }, { h: 'Lần chưa đạt', w: 9, c: 1 }, { h: 'Link ảnh', w: 12 }],
-    nk.yeuCau.map(x => x.slice(0, 15).concat([linkAnh(x[15])])), nk.yeuCau.map(x => idsAnh(x[15], 2)), 2, { to: row => row[13] === 'Có' ? XL.do : null });
+  if (nk.tram.length || !nk.yeuCau) trang('NK kiểm tra trạm', [{ h: 'Thời gian', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Trạm', w: 10 }, { h: 'Người thực hiện', w: 18 }, { h: 'Cách ghi', w: 9 }, { h: 'Tình trạng bả', w: 12 }, { h: 'Thay bả', w: 8, c: 1 }, { h: 'Dấu hiệu', w: 18 }, { h: 'Tình trạng trạm', w: 13 }, { h: 'Ghi chú', w: 24 }, { h: 'Vùng định vị', w: 16 }, { h: 'GPS', w: 24 }, { h: 'Cách gửi', w: 18 }],
+    nk.tram.map(x => x.slice(0, 12).concat([x[13]])), nk.tram.map(x => idsAnh(x[12], 1)), ['Ảnh chụp'], { to: row => row[4] === 'Nhập tay' ? XL.cam : null });
+  if (nk.khu.length || !nk.yeuCau) trang('NK kiểm tra khu', [{ h: 'Thời gian', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Người thực hiện', w: 18 }, { h: 'Cách ghi', w: 9 }, { h: 'Côn trùng', w: 11 }, { h: 'Rắn', w: 12 }, { h: 'Xác chuột', w: 8, c: 1 }, { h: 'Đã xử lý', w: 26 }, { h: 'Ghi chú', w: 26 }, { h: 'GPS', w: 24 }, { h: 'Vùng định vị', w: 16 }, { h: 'Cách gửi', w: 18 }],
+    nk.khu.map(x => x.slice(0, 10).concat([x[11], x[12]])), nk.khu.map(x => idsAnh(x[10], 1)), ['Ảnh chụp']);
+  if (nk.phun.length || !nk.yeuCau) trang('NK phun', [{ h: 'Thời gian', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Người thực hiện', w: 18 }, { h: 'Loại phun', w: 16 }, { h: 'Hóa chất (PL01)', w: 28 }, { h: 'Ngoài danh mục', w: 18 }, { h: 'Khung giờ', w: 10 }, { h: 'Ghi chú', w: 24 }, { h: 'GPS', w: 24 }, { h: 'Vùng định vị', w: 16 }, { h: 'Cách gửi', w: 18 }],
+    nk.phun.map(x => x.slice(0, 9).concat([x[10], x[11]])), nk.phun.map(x => idsAnh(x[9], 2)), ['Ảnh nhãn hóa chất', 'Ảnh đang phun'], { to: row => row[5] || row[6] ? XL.do : null });
+  if (nk.coMat.length || !nk.yeuCau) trang('NK điểm danh', [{ h: 'Thời gian', w: 18 }, { h: 'Người', w: 22 }, { h: 'GPS', w: 26 }, { h: 'Vùng định vị', w: 16 }, { h: 'Cách gửi', w: 18 }],
+    nk.coMat.map(x => x.slice(0, 3).concat([x[4], x[5]])), nk.coMat.map(x => idsAnh(x[3], 1)), ['Ảnh chụp']);
+  if (nk.yeuCau && nk.yeuCau.length) trang('Yêu cầu phát sinh', colsYC(), nk.yeuCau.map(x => x.slice(0, 15)), nk.yeuCau.map(idsYC), ['Ảnh khi báo', 'Ảnh có mặt', 'Ảnh sau xử lý'], { to: row => row[13] === 'Có' ? XL.do : null });
 }
-function ghiChuAnh(ANH) { return !ANH ? 'Không kèm ảnh – cột "Link ảnh" mở ảnh gốc trên Google Drive (cần mạng vào được Google).' : `Đã chèn ${Object.keys(ANH).filter(k => k[0] !== '_').length} ảnh thu nhỏ trực tiếp vào file (xem được không cần mạng)${ANH._tong > ANH._lay ? `; còn ${ANH._tong - ANH._lay} ảnh vượt giới hạn ${ANH_TOI_DA} ảnh/lần chỉ có link – chọn khoảng ngày ngắn hơn để chèn đủ` : ''}. Ảnh gốc độ nét cao: cột "Link ảnh".`; }
+function colsYC() { return [{ h: 'Mã', w: 13 }, { h: 'Thời gian tạo', w: 18 }, { h: 'Người tạo', w: 18 }, { h: 'Khu', w: 7, c: 1 }, { h: 'Vị trí', w: 18 }, { h: 'Loại', w: 12 }, { h: 'Mô tả', w: 36 }, { h: 'Hạn có mặt', w: 18 }, { h: 'Có mặt lúc', w: 18 }, { h: 'Xử lý xong', w: 18 }, { h: 'Nội dung xử lý', w: 26 }, { h: 'Xác nhận', w: 18 }, { h: 'Trạng thái', w: 13 }, { h: 'Trễ hạn', w: 8, c: 1 }, { h: 'Lần chưa đạt', w: 9, c: 1 }]; }
+/** 3 ảnh của 1 yêu cầu: khi báo · khi có mặt · sau xử lý (bản cũ chỉ có 1 cột gộp thì chia lần lượt) */
+function idsYC(x) { return x.length > 16 ? [idsAnh(x[16], 1)[0], idsAnh(x[17], 1)[0], idsAnh(x[18], 1)[0]] : idsAnh(x[15], 3); }
+function idsNK(nk) {
+  return [].concat(nk.tram.map(x => idsAnh(x[12], 1)), nk.khu.map(x => idsAnh(x[10], 1)), nk.phun.map(x => idsAnh(x[9], 2)), nk.coMat.map(x => idsAnh(x[3], 1)), (nk.yeuCau || []).map(idsYC)).flat().filter(Boolean);
+}
+function ghiChuAnh(ANH) { return !ANH ? 'Không kèm ảnh – các cột ảnh là link "Xem ảnh" mở ảnh gốc trên Google Drive (cần mạng vào được Google).' : `Đã chèn ${Object.keys(ANH).filter(k => k[0] !== '_').length} ảnh chụp trực tiếp vào file (xem được không cần mạng)${ANH._tong > ANH._lay ? `; còn ${ANH._tong - ANH._lay} ảnh vượt giới hạn ${ANH_TOI_DA} ảnh/lần nên ô đó là link "Xem ảnh" – chọn khoảng ngày ngắn hơn để chèn đủ` : ''}.`; }
 
 /* ================= NGƯỜI DÙNG ================= */
 const TAB_TEN = [['CongViec', 'Công việc', 'Sửa: NCC điểm danh, quét trạm, phun, xử lý phát sinh; Bên A tạo & xác nhận yêu cầu'], ['Lich', 'Lịch', 'Sửa: nhập / sửa lịch, tải Excel'], ['KhuVuc', 'Khu vực', 'Sửa: thêm/sửa/xóa khu, trạm, in QR'], ['BaoCao', 'Báo cáo', 'Chỉnh riêng từng mục con bên dưới'], ['CaiDat', 'Cài đặt', 'Sửa: tài khoản, hợp đồng, tỷ trọng, lỗi tiền, thời gian, vùng']];
