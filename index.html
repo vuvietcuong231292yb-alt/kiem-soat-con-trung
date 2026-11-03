@@ -283,7 +283,7 @@ function thumbs(ids) {
 }
 
 /* ---------------- điều hướng ---------------- */
-const PHIEN_BAN = '03/11/2026 (b)';
+const PHIEN_BAN = '03/11/2026 (c)';
 const PAGES = {};
 let NAV_ON = 'home', BADGE_YC = 0, DD_TIEP = null;
 function go(fn, args, push = true) {
@@ -342,6 +342,20 @@ async function taiNhanh(k, action, p, ve) {
   if (r) { cSet(k, r); ve(r, false); }
   else if (!c) ve(null, false);
   else if (!LOI_MANG) toast(LOI_CUOI, 'err');
+}
+/* ---------------- tải trước ngầm: chuyển tab hiện ngay, không phải chờ ---------------- */
+async function taiTruoc() {
+  if (!APP || OFFLINE || document.hidden) return;
+  const th = homStr().slice(0, 7), viec = [];
+  if (qt('CongViec')) viec.push(['yc_mo', 'dsYeuCau', { loc: 'mo' }]);
+  if (qt('Lich')) viec.push(['lich_' + th, 'layLich', { thang: th }]);
+  if (qbc('NghiemThu') || qbc('Loi')) viec.push(['bc2_' + th, 'baoCao', { thang: th }]);
+  for (const v of viec) {
+    if (!APP || OFFLINE) return;
+    if (CUR && ((v[1] === 'layLich' && CUR.fn === 'lich') || (v[1] === 'baoCao' && CUR.fn === 'baoCao'))) continue;
+    const r = await call(v[1], v[2], true, true);
+    if (r) cSet(v[0], r);
+  }
 }
 /* ---------------- tự làm mới: hỏi máy chủ 20 giây/lần, dữ liệu đổi thì vẽ lại màn hình ---------------- */
 let VER = null, CHO_LM = false, CAT_LUC = 0, NT_DANG = false;
@@ -448,6 +462,7 @@ async function start() {
     if (!daCo) moDau(); else { renderNav(); if (CUR && CUR.fn === 'home') PAGES.home(); }
     napJsQR().catch(() => {});
     setTimeout(() => guiHangDoi(false), 1500);
+    setTimeout(taiTruoc, 2500);
     return;
   }
   if (!TOKEN) return;
@@ -548,16 +563,29 @@ async function guiGhiNhan(btn, action, payload, okMsg, moTa, anhKeys) {
   payload.maGhi = 'G' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   payload.tgGhi = bayGio().getTime();
   if (btn) btn.disabled = true;
-  let r = null;
+  const banGhi = { maGhi: payload.maGhi, action, p: Object.assign({}, payload, { offline: true }), moTa, luc: payload.tgGhi, ai: APP.user.ten, loi: '' };
+  let r = null, het = false;
   LOI_MANG = false;
-  if (!OFFLINE && navigator.onLine !== false) r = await call(action, payload, false, true);
-  else LOI_MANG = true;
+  if (!OFFLINE && navigator.onLine !== false) {
+    const goi = call(action, payload, true, true).then(x => ({ x, mang: LOI_MANG, loi: LOI_CUOI }));
+    const cho = await Promise.race([goi, new Promise(ok => setTimeout(() => ok(null), 1500))]);
+    if (cho) { r = cho.x; LOI_MANG = cho.mang; LOI_CUOI = cho.loi; }
+    else {
+      // máy chủ chậm: lưu ngay vào máy (dự phòng) rồi gửi tiếp ngầm; máy chủ tự bỏ bản trùng theo mã ghi
+      het = true;
+      try { await HD.them(banGhi); } catch (e) { /* vẫn gửi ngầm */ }
+      goi.then(async k => {
+        if (k.x) { try { await HD.xoa(banGhi.maGhi); } catch (e) {} capNhatHD(); return; }
+        if (!k.mang) { banGhi.loi = k.loi; try { await HD.them(banGhi); } catch (e) {} toast('Máy chủ từ chối: ' + moTa + ' – ' + k.loi, 'err'); }
+        capNhatHD();
+      });
+    }
+  } else LOI_MANG = true;
   if (btn) btn.disabled = false;
+  if (het) { toast('✓ ' + okMsg + ' – đang gửi lên máy chủ'); capNhatHD(); return { ok: true, choGui: true }; }
   if (r) { toast(okMsg); return r; }
   if (!LOI_MANG) { toast(LOI_CUOI, 'err'); return null; }
-  try {
-    await HD.them({ maGhi: payload.maGhi, action, p: Object.assign({}, payload, { offline: true }), moTa, luc: payload.tgGhi, ai: APP.user.ten, loi: '' });
-  } catch (e) { toast('Không lưu được vào máy: ' + e.message, 'err'); return null; }
+  try { await HD.them(banGhi); } catch (e) { toast('Không lưu được vào máy: ' + e.message, 'err'); return null; }
   toast('Mất mạng – đã lưu trong máy, app tự gửi khi có sóng');
   capNhatHD();
   return { ok: true, choGui: true };
@@ -696,7 +724,7 @@ function nenAnh(file, g, lucChup) {
   return new Promise((res, rej) => {
     const url = URL.createObjectURL(file); const img = new Image();
     img.onload = () => {
-      let w = img.naturalWidth, hh = img.naturalHeight; const sc = Math.min(1, 1280 / Math.max(w, hh));
+      let w = img.naturalWidth, hh = img.naturalHeight; const sc = Math.min(1, 1152 / Math.max(w, hh));
       w = Math.round(w * sc); hh = Math.round(hh * sc);
       const c = document.createElement('canvas'); c.width = w; c.height = hh; const x = c.getContext('2d');
       x.drawImage(img, 0, 0, w, hh);
@@ -724,7 +752,7 @@ function nenAnh(file, g, lucChup) {
         x.fillText(l.t, pad + 4, y, w - pad * 2);
         y += fs * l.to * 1.32;
       });
-      URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', .7));
+      URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', .64));
     };
     img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Không đọc được ảnh')); };
     img.src = url;
@@ -1011,10 +1039,15 @@ async function xoaKhuF(b, ma) {
   STACK = []; tab('khu');
 }
 async function taiLaiDanhMuc() { const r = await call('khoiTao', {}, true, true); if (r) apDungApp(r); }
-PAGES.khuCT = async function (ma, cach) {
-  setTitle(ma); main('<div class="muted">Đang tải…</div>');
-  const me = CUR; const r = OFFLINE ? null : await call('chiTietKhu', { ma }, true, true); if (me !== CUR) return;
-  if (!r) { if (OFFLINE || LOI_MANG) return khuOffline(ma, cach); return toast(LOI_CUOI, 'err'); }
+PAGES.khuCT = function (ma, cach) {
+  setTitle(ma);
+  if (!cGet('khu_' + ma)) main('<div class="muted">Đang tải…</div>');
+  taiNhanh('khu_' + ma, 'chiTietKhu', { ma }, r => {
+    if (!r) { if (OFFLINE || LOI_MANG) return khuOffline(ma, cach); return toast(LOI_CUOI, 'err'); }
+    veKhuCT(r, ma, cach);
+  });
+};
+function veKhuCT(r, ma, cach) {
   const k = r.khu, hn = r.homNay;
   let s = cach === 'QR' ? `<div class="alert ok">✓ Đã quét QR khu vực ${h(k.ma)}</div>` : '';
   s += `<div class="card"><b>${h(k.ma)} – ${h(k.ten)}</b><div class="row sb"><span class="muted">${h(k.nhom)}</span>${q('KhaiTram') ? `<button class="btn btn-o btn-s" onclick="go('khuForm',['${k.ma}'])">✏️ Sửa khu</button>` : ''}</div><div class="tags">
@@ -1126,8 +1159,12 @@ PAGES.yc = async function () {
   const segs = [['mo', 'Đang mở'], ['cuaToi', 'Của tôi'], ['tatCa', 'Tất cả']];
   main(`${q('TaoYeuCau') ? `<button class="btn btn-block" onclick="go('ycTao')">＋ Tạo yêu cầu phát sinh</button>` : ''}
     <div class="seg">${segs.map(s => `<button class="${YC_LOC === s[0] ? 'on' : ''}" onclick="YC_LOC='${s[0]}';PAGES.yc()">${s[1]}</button>`).join('')}</div><div id="dsyc" class="muted">Đang tải…</div>`);
-  const me = CUR; const r = await call('dsYeuCau', { loc: YC_LOC }, true); if (!r || me !== CUR || !$('#dsyc')) return;
-  $('#dsyc').innerHTML = r.length ? r.map(ycItem).join('') : '<div class="card muted">Không có yêu cầu.</div>';
+  const loc = YC_LOC;
+  taiNhanh('yc_' + loc, 'dsYeuCau', { loc }, r => {
+    if (!$('#dsyc') || YC_LOC !== loc) return;
+    if (!r) { $('#dsyc').innerHTML = `<div class="alert err">${h(OFFLINE ? 'Đang mất mạng – chưa có danh sách lưu trong máy.' : LOI_CUOI)}</div>`; return; }
+    $('#dsyc').innerHTML = r.length ? r.map(ycItem).join('') : '<div class="card muted">Không có yêu cầu.</div>';
+  });
 };
 PAGES.ycTao = function () {
   setTitle('Tạo yêu cầu'); WM = 'Yêu cầu phát sinh';
@@ -1149,10 +1186,20 @@ async function guiYC(b) {
   toast(`Đã gửi ${r.ma} – hạn có mặt ${hm(r.han)}`);
   STACK = []; CUR = null; renderNav('yc'); go('yc', [], false); go('ycCT', [r.ma]);
 }
-PAGES.ycCT = async function (ma) {
-  setTitle(ma); main('<div class="muted">Đang tải…</div>');
-  const me = CUR; const ds = await call('dsYeuCau', { loc: 'tatCa' }, true); if (!ds || me !== CUR) return;
-  const y = ds.find(x => x.ma === ma); if (!y) return main('<div class="card">Không tìm thấy yêu cầu.</div>');
+PAGES.ycCT = function (ma) {
+  setTitle(ma);
+  const coSan = ['yc_tatCa', 'yc_mo', 'yc_cuaToi'].map(k => (cGet(k) || []).find(x => x.ma === ma)).find(Boolean);
+  if (coSan) veYcCT(coSan); else main('<div class="muted">Đang tải…</div>');
+  taiNhanh('yc_tatCa', 'dsYeuCau', { loc: 'tatCa' }, (ds, tuMay) => {
+    if (tuMay && coSan) return;
+    if (!ds) { if (!coSan) main(`<div class="alert err">${h(OFFLINE ? 'Đang mất mạng.' : LOI_CUOI)}</div>`); return; }
+    if ($('#ycf') && $('#ycf').innerHTML.trim()) return; // đang nhập dở, không vẽ lại
+    const y = ds.find(x => x.ma === ma); if (!y) { if (tuMay) return; return main('<div class="card">Không tìm thấy yêu cầu.</div>'); }
+    veYcCT(y);
+  });
+};
+function veYcCT(y) {
+  const ma = y.ma;
   const laNguoiTao = APP.user.ten === y.nguoiTao || q('QuanTri');
   let s = `<div class="card"><div class="row sb"><b>${h(y.ma)} · ${h(y.loai)}</b><span class="badge ${MAU_TT[y.tt] || ''}">${h(y.tt)}</span></div>
     <div>${h(y.khu)} – ${h(y.tenKhu)}${y.viTri ? ' · ' + h(y.viTri) : ''}</div><div style="margin:6px 0">${h(y.moTa)}</div>
@@ -1215,19 +1262,25 @@ PAGES.lich = async function (thang) {
     <div id="lnhap"></div><div id="lb" class="muted">Đang tải…</div><div id="lsave"></div>`);
   if (!LICH || LICH.thang !== thang) LICH = null;
   const me = CUR, k = 'lich_' + thang;
+  const cu = cGet(k);
+  if (cu) { apLich(thang, cu); veLich(); }
   let r = OFFLINE ? null : await call('layLich', { thang }, true, true);
   if (me !== CUR || !$('#lb')) return;
-  if (r) cSet(k, r); else r = cGet(k);
+  if (r) cSet(k, r); else r = cu;
+  if (cu && (LICH_DOI || LICH_SUA)) return; // đang sửa lịch thì không vẽ đè
   if (!r) {
     $('#lb').innerHTML = `<div class="alert err">Chưa tải được lịch tháng ${thang.slice(5)}/${thang.slice(0, 4)}: ${h(OFFLINE || LOI_MANG ? 'mất mạng hoặc mạng đang chặn Google' : LOI_CUOI || 'lỗi máy chủ')}.<br><small>Nếu vừa cập nhật Code.gs: mở Apps Script, chạy lại hàm caiDat (bấm Cho phép) rồi Triển khai phiên bản mới.</small></div><button class="btn btn-block" onclick="PAGES.lich('${thang}')">Thử lại</button>`;
     return;
   }
+  apLich(thang, r); LICH_DOI = false; LICH_SUA = false;
+  veLich();
+};
+function apLich(thang, r) {
   const map = {};
   r.entries.forEach(e => { map[e.maKhu] = map[e.maKhu] || {}; map[e.maKhu][e.ngay] = (map[e.maKhu][e.ngay] || '') + e.loai; });
   Object.keys(map).forEach(k => Object.keys(map[k]).forEach(d => { map[k][d] = ['K', 'P', 'S'].filter(c => map[k][d].includes(c)).join(''); }));
-  LICH = { thang, map, cb: r.canhBao }; LICH_DOI = false; LICH_SUA = false;
-  veLich();
-};
+  LICH = { thang, map, cb: r.canhBao };
+}
 function ngayThang(thang) {
   const y = +thang.slice(0, 4), m = +thang.slice(5, 7), n = new Date(y, m, 0).getDate();
   const thu = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -1565,7 +1618,7 @@ async function luuTram(b, ma) {
 
 /* ================= BÁO CÁO ================= */
 /* ================= TAB BÁO CÁO: Nhật ký · Lỗi · Nghiệm thu ================= */
-let BC = null, BC_TH = null, BC_TAB = 'nt', LOI_LOC = 'tat';
+let BC = null, BC_TH = null, BC_TAB = 'nt', LOI_LOC = 'tat', BC_MOI = false;
 const BC_TABS = [['nk', '📒 Nhật ký'], ['loi', '⚠ Lỗi'], ['nt', '💰 Nghiệm thu']];
 function qbc(c) { const m = APP && APP.user.bc; if (!m) return qt('BaoCao') ? (c === 'NhatKy' ? 'xem' : qt('BaoCao')) : ''; return m[c] || ''; }
 const BC_QUYEN = { nk: 'NhatKy', loi: 'Loi', nt: 'NghiemThu' };
@@ -1583,8 +1636,8 @@ PAGES.baoCao = function (thang) {
   if (BC_TAB === 'nk') { XD_HOST = 'bc'; return veXDTrang(); }
   $('#bch').innerHTML = `<div class="row" style="margin-bottom:8px"><input type="month" id="bt" value="${BC_TH}" onchange="PAGES.baoCao(this.value)" class="grow"><button class="btn" onclick="xuatExcel(this)">⬇ Excel</button></div><div style="margin:-2px 2px 8px">${oXlAnh()}</div>`;
   $('#bcb').innerHTML = '<div class="muted">Đang tính toán…</div>';
-  const thMo = BC_TH;
-  taiNhanh('bc2_' + BC_TH, 'baoCao', { thang: BC_TH }, (r) => {
+  const thMo = BC_TH, moi = BC_MOI; BC_MOI = false;
+  taiNhanh('bc2_' + BC_TH, 'baoCao', { thang: BC_TH, moi }, (r) => {
     if (!$('#bcb') || BC_TAB === 'nk' || BC_TH !== thMo) return;
     if (!r || !r.nt) { $('#bcb').innerHTML = `<div class="alert err">${h(OFFLINE ? 'Đang mất mạng – chưa có báo cáo tháng này lưu trong máy.' : LOI_CUOI)}</div>`; return; }
     BC = r; veBC();
@@ -1593,6 +1646,7 @@ PAGES.baoCao = function (thang) {
 function veBC() {
   if (!$('#bcb') || !BC || BC_TAB === 'nk') return;
   let s = BC.nt.tamTinh ? `<div class="alert">Tháng chưa kết thúc – số liệu <b>tạm tính</b> (chỉ tính các tuần đã qua; phần phun tính khi hết tháng).</div>` : '';
+  if (BC.tinhLuc) { const d = new Date(BC.tinhLuc); s += `<div class="row sb muted" style="margin:-2px 2px 8px;font-size:13px"><span>Số liệu tính lúc ${p2(d.getHours())}:${p2(d.getMinutes())} ${p2(d.getDate())}/${p2(d.getMonth() + 1)}${BC.moiNhat ? ' · mới nhất' : ' · có dữ liệu mới'}</span><button class="btn btn-o btn-s" onclick="BC_MOI=true;PAGES.baoCao()">↻ Tính lại</button></div>`; }
   if (Math.abs(BC.nt.tongTyTrong - 100) > 0.05) s += `<div class="alert err">Tổng tỷ trọng các khu đang là ${BC.nt.tongTyTrong}% (phải 100%) – sửa ở Cài đặt › Tỷ trọng khu vực.</div>`;
   s += BC_TAB === 'loi' ? veLoi() : veNT();
   $('#bcb').innerHTML = s;
@@ -1665,7 +1719,7 @@ function o2(nhan, gt, phu, loc, mau) { return `<div class="stat" onclick="LOI_LO
 async function duyetGT(b, x, kq) {
   if (kq === 'Không chấp nhận' && !confirm('Không chấp nhận giải trình? Lượt này sẽ bị tính lỗi trừ tiền.')) return;
   const r = await gui(b, 'duyetGT', { sheet: x.sheet, id: x.id, ngay: x.ngay, kq }, kq ? 'Đã ' + kq.toLowerCase() : 'Đã mở lại');
-  if (r) PAGES.baoCao();
+  if (r) { BC_MOI = true; PAGES.baoCao(); }
 }
 function cuoiThang(th) { return th + '-' + p2(new Date(+th.slice(0, 4), +th.slice(5, 7), 0).getDate()); }
 
@@ -1703,8 +1757,8 @@ function nkCard(x) {
     ${thumbs(x.anh)}</div>`;
 }
 
-async function boQua(b, khoa, bq, khu) { const r = await gui(b, 'capNhatViPham', { thang: BC_TH, khoa, boQua: bq, khu: khu || '' }, bq ? 'Đã bỏ qua' : 'Đã khôi phục'); if (r) PAGES.baoCao(); }
-async function xoaVP(b, khoa) { if (!confirm('Xóa lỗi nhập tay này?')) return; const r = await gui(b, 'xoaViPham', { khoa }, 'Đã xóa'); if (r) PAGES.baoCao(); }
+async function boQua(b, khoa, bq, khu) { const r = await gui(b, 'capNhatViPham', { thang: BC_TH, khoa, boQua: bq, khu: khu || '' }, bq ? 'Đã bỏ qua' : 'Đã khôi phục'); if (r) { BC_MOI = true; PAGES.baoCao(); } }
+async function xoaVP(b, khoa) { if (!confirm('Xóa lỗi nhập tay này?')) return; const r = await gui(b, 'xoaViPham', { khoa }, 'Đã xóa'); if (r) { BC_MOI = true; PAGES.baoCao(); } }
 let LT_DS = null;
 PAGES.vpForm = async function () {
   setTitle('Thêm lỗi trừ tiền');
@@ -1731,7 +1785,7 @@ function vpTinh() {
 async function themVP(b) {
   const n = $('#vn').value;
   const r = await gui(b, 'themViPham', { maLoi: $('#vl').value, soLuong: $('#vsl').value, soTien: $('#vst').value, maKhu: $('#vk').value, ngay: n, moTa: $('#vm').value }, 'Đã thêm lỗi');
-  if (r) { BC_TH = n.slice(0, 7); BC_TAB = 'loi'; LOI_LOC = 'tien'; goBack(); }
+  if (r) { BC_TH = n.slice(0, 7); BC_TAB = 'loi'; LOI_LOC = 'tien'; BC_MOI = true; goBack(); }
 }
 
 
@@ -1998,7 +2052,7 @@ async function xuatExcel(b) {
   try {
     await napExcel();
     const thang = BC_TH;
-    const r = await call('baoCao', { thang }); if (!r || !r.nt) throw new Error('Không lấy được báo cáo');
+    const r = await call('baoCao', { thang, moi: true }); if (!r || !r.nt) throw new Error('Không lấy được báo cáo');
     const nk = await call('nhatKyThang', { thang }); if (!nk) throw new Error('Không lấy được nhật ký');
     BC = r;
     const ANH = XL_ANH ? await taiAnhNho(r.nt.giaiTrinh.map(x => idsAnh(x.anh, 1)).flat().concat(idsNK(nk))) : null;
