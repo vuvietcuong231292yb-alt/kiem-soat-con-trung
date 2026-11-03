@@ -283,7 +283,7 @@ function thumbs(ids) {
 }
 
 /* ---------------- điều hướng ---------------- */
-const PHIEN_BAN = '03/11/2026 (d)';
+const PHIEN_BAN = '03/11/2026 (e)';
 const PAGES = {};
 let NAV_ON = 'home', BADGE_YC = 0, DD_TIEP = null;
 function go(fn, args, push = true) {
@@ -1564,7 +1564,7 @@ PAGES.tram = function () {
   setTitle('Trạm bả & tem QR');
   main(`<div class="row wrap" style="margin-bottom:10px">${khuSelect('tf', '', 'Tất cả khu vực')}</div>
     <div class="row wrap" style="margin-bottom:10px">${q('KhaiTram') ? `<button class="btn" onclick="go('tramForm',[null,$('#tf').value])">＋ Thêm trạm</button>` : ''}
-    <button class="btn btn-o" onclick="inTram()">🖨 In tem trạm đã chọn</button><button class="btn btn-o" onclick="inKhu()">🖨 In tem khu vực</button></div>
+    <button class="btn btn-o" onclick="inTram()">🖨 In tem trạm đã chọn</button><button class="btn btn-o" onclick="inKhu()">🖨 In tem khu vực</button><button class="btn" onclick="moXuatTem()">⬇ Xuất file tem (gửi máy khác in)</button></div>
     <div class="row" style="margin-bottom:8px"><label class="row"><input type="checkbox" id="tall" onchange="document.querySelectorAll('.tchk').forEach(c=>c.checked=this.checked)"> Chọn tất cả</label></div><div id="dst"></div>`);
   $('#tf').onchange = veDsTram; veDsTram();
 };
@@ -1595,6 +1595,107 @@ function inTem(list) {
   p.innerHTML = list.map((t, i) => `<div class="tem"><div class="qr" id="qr${i}"></div><div class="tem-t"><b>${h(t.code)}</b><div>${h(t.l1)}</div><div class="s">${h(t.l2)}</div><div class="s">Green Master · Quét để ghi nhận kiểm tra</div></div></div>`).join('');
   list.forEach((t, i) => new QRCode(document.getElementById('qr' + i), { text: urlTem() + '?t=' + encodeURIComponent(t.code), width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M }));
   setTimeout(() => window.print(), 700);
+}
+/* ---- Xuất file tem (PDF A4 / ảnh PNG từng tem) để gửi sang máy khác in ---- */
+const CO_TEM = { nho: [50, 25, 'Nhỏ 50×25 mm'], vua: [62, 30, 'Vừa 62×30 mm'], lon: [80, 40, 'Lớn 80×40 mm'] };
+let XT = { nd: 'chon', dd: 'pdf', co: 'vua' };
+function dsTemXuat() {
+  const k = $('#tf') ? $('#tf').value : '';
+  if (XT.nd === 'khu') return APP.khu.filter(x => !k || x.ma === k).map(x => ({ code: x.ma, l1: 'Tem khu vực', l2: x.ten }));
+  const chon = XT.nd === 'chon' ? [...document.querySelectorAll('.tchk:checked')].map(c => c.value) : APP.tram.filter(t => (!k || t.khu === k) && t.tt === 'Đang dùng').map(t => t.ma);
+  return chon.map(ma => { const t = APP.tram.find(x => x.ma === ma); return { code: ma, l1: t.loai, l2: t.khu + ' – ' + tenKhu(t.khu) }; });
+}
+function moXuatTem() {
+  if (!kiemUrl()) return;
+  const d = document.createElement('div'); d.className = 'sheet-bg'; d.id = 'xtBg';
+  const nut = (nhom, ds) => `<div class="seg3" style="margin:6px 0 12px">${ds.map(o => `<button class="${XT[nhom] === o[0] ? 'on' : ''}" onclick="XT.${nhom}='${o[0]}';veXT()">${o[1]}</button>`).join('')}</div>`;
+  d.innerHTML = `<div class="sheet" id="xtS"></div>`;
+  document.body.appendChild(d);
+  window.veXT = () => {
+    const n = dsTemXuat().length;
+    $('#xtS').innerHTML = `<b style="font-size:17px">⬇ Xuất file tem QR</b>
+      <div class="muted" style="margin-top:8px">Nội dung</div>${nut('nd', [['chon', 'Trạm đã chọn'], ['tatCa', 'Tất cả trạm (theo khu đang lọc)'], ['khu', 'Tem khu vực']])}
+      <div class="muted">Định dạng</div>${nut('dd', [['pdf', 'PDF khổ A4'], ['png', 'Ảnh PNG từng tem (.zip)']])}
+      <div class="muted">Cỡ tem</div>${nut('co', Object.keys(CO_TEM).map(k => [k, CO_TEM[k][2]]))}
+      <div class="muted" style="margin-bottom:10px">${XT.dd === 'pdf' ? 'PDF A4 có đường cắt, mở và in được trên mọi máy tính, điện thoại. Khi in chọn tỉ lệ 100% (Actual size).' : 'Mỗi tem là 1 ảnh PNG 300 dpi đúng cỡ – dùng cho máy in tem nhãn (Brother, Xprinter…).'}</div>
+      <div class="row sb"><b>${n} tem</b><span class="row" style="gap:8px"><button class="btn btn-o" onclick="document.getElementById('xtBg').remove()">Đóng</button><button class="btn" ${n ? '' : 'disabled'} onclick="taoFileTem(this)">Tạo file</button></span></div>`;
+  };
+  veXT();
+}
+/** Vẽ 1 tem lên canvas 300 dpi */
+function veTemCanvas(t, co) {
+  const mm = 300 / 25.4, W = Math.round(co[0] * mm), H = Math.round(co[1] * mm), pad = Math.round(2 * mm);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  const q = H - pad * 2;
+  const tmp = document.createElement('div');
+  new QRCode(tmp, { text: urlTem() + '?t=' + encodeURIComponent(t.code), width: q, height: q, correctLevel: QRCode.CorrectLevel.M });
+  const qc = tmp.querySelector('canvas');
+  g.imageSmoothingEnabled = false;
+  if (qc) g.drawImage(qc, pad, pad, q, q);
+  const x = pad * 2 + q, rong = W - x - pad;
+  const dong = (txt, px, dam, mau, y) => {
+    g.font = `${dam ? '700 ' : ''}${px}px Arial, "Helvetica Neue", sans-serif`; g.fillStyle = mau || '#111';
+    let s = String(txt || '');
+    while (s.length > 1 && g.measureText(s).width > rong) s = s.slice(0, -2) + '…';
+    g.fillText(s, x, y); return y;
+  };
+  g.textBaseline = 'top';
+  const fs = Math.round(H / 7.2);
+  let y = pad;
+  dong(t.code, Math.round(fs * 1.35), 1, '#000', y); y += fs * 1.65;
+  dong(t.l1, fs, 0, '#222', y); y += fs * 1.3;
+  // tên khu có thể dài: tách 2 dòng
+  g.font = `${Math.round(fs * .85)}px Arial, sans-serif`;
+  const tu = String(t.l2 || '').split(' '); let d1 = '', i = 0;
+  while (i < tu.length && g.measureText((d1 + ' ' + tu[i]).trim()).width <= rong) { d1 = (d1 + ' ' + tu[i]).trim(); i++; }
+  dong(d1, Math.round(fs * .85), 0, '#444', y); y += fs * 1.05;
+  if (i < tu.length) { dong(tu.slice(i).join(' '), Math.round(fs * .85), 0, '#444', y); y += fs * 1.05; }
+  dong('Quét QR để ghi nhận kiểm tra', Math.round(fs * .62), 0, '#666', H - pad - fs * .7);
+  return c;
+}
+async function taoFileTem(b) {
+  const ds = dsTemXuat(); if (!ds.length) return toast('Chưa có tem nào', 'err');
+  const co = CO_TEM[XT.co];
+  b.disabled = true; b.textContent = 'Đang tạo…';
+  try {
+    let blob, ten;
+    const ngay = homStr().replace(/-/g, '');
+    if (XT.dd === 'pdf') {
+      await napScript('PDF', ['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'], () => !!(window.jspdf && window.jspdf.jsPDF));
+      const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+      const le = 8, gap = 3, cot = Math.max(1, Math.floor((210 - le * 2 + gap) / (co[0] + gap))), hang = Math.max(1, Math.floor((297 - le * 2 + gap) / (co[1] + gap)));
+      ds.forEach((t, i) => {
+        const o = i % (cot * hang); if (i && !o) pdf.addPage();
+        const x = le + (o % cot) * (co[0] + gap), y = le + Math.floor(o / cot) * (co[1] + gap);
+        pdf.addImage(veTemCanvas(t, co).toDataURL('image/png'), 'PNG', x, y, co[0], co[1], undefined, 'FAST');
+        pdf.setDrawColor(170); pdf.setLineDashPattern([1, 1], 0); pdf.setLineWidth(0.15); pdf.rect(x, y, co[0], co[1]);
+      });
+      blob = pdf.output('blob'); ten = `Tem_QR_${XT.nd === 'khu' ? 'khu' : 'tram'}_${ngay}.pdf`;
+    } else {
+      await napScript('ZIP', ['https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'], () => !!window.JSZip);
+      const zip = new JSZip();
+      for (const t of ds) {
+        const c = veTemCanvas(t, co);
+        const pb = await new Promise(r => c.toBlob(r, 'image/png'));
+        zip.file(t.code.replace(/[^\w.-]/g, '_') + '.png', pb);
+      }
+      blob = await zip.generateAsync({ type: 'blob' }); ten = `Tem_QR_${XT.nd === 'khu' ? 'khu' : 'tram'}_${ngay}.zip`;
+    }
+    xongFile(blob, ten);
+  } catch (e) { toast(e.message || String(e), 'err'); b.disabled = false; b.textContent = 'Tạo file'; }
+}
+/** Sau khi tạo file: cho chọn Chia sẻ (Zalo, email…) hoặc Tải về */
+function xongFile(blob, ten) {
+  const f = new File([blob], ten, { type: blob.type });
+  const coShare = !!(navigator.canShare && navigator.canShare({ files: [f] }));
+  $('#xtS').innerHTML = `<b style="font-size:17px">✓ Đã tạo file</b><div style="margin:8px 0">${h(ten)} · ${Math.max(1, Math.round(blob.size / 1024)).toLocaleString('vi-VN')} KB</div>
+    <div class="muted" style="margin-bottom:10px">${coShare ? 'Bấm Chia sẻ để gửi qua Zalo, email… sang máy có máy in, hoặc Tải về máy này.' : 'Bấm Tải về, rồi gửi file cho máy có máy in (Zalo, email, USB…).'}</div>
+    <div class="mrow">${coShare ? '<button class="btn" id="xtShare">📤 Chia sẻ</button>' : ''}<button class="btn ${coShare ? 'btn-o' : ''}" id="xtTai">⬇ Tải về</button></div>
+    <button class="btn btn-o btn-block" style="margin-top:8px" onclick="document.getElementById('xtBg').remove()">Đóng</button>`;
+  $('#xtTai').onclick = () => { const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = u; a.download = ten; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 120000); toast('Đã tải ' + ten); };
+  if (coShare) $('#xtShare').onclick = () => navigator.share({ files: [f], title: ten }).catch(() => {});
 }
 PAGES.tramForm = function (ma, khuMD) {
   const t = ma ? APP.tram.find(x => x.ma === ma) : null;
