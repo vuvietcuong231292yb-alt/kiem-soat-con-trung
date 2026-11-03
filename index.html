@@ -283,7 +283,7 @@ function thumbs(ids) {
 }
 
 /* ---------------- điều hướng ---------------- */
-const PHIEN_BAN = '03/11/2026 (c)';
+const PHIEN_BAN = '03/11/2026 (d)';
 const PAGES = {};
 let NAV_ON = 'home', BADGE_YC = 0, DD_TIEP = null;
 function go(fn, args, push = true) {
@@ -1415,6 +1415,7 @@ PAGES.more = function () {
     s += muc('users', '👥', 'Tài khoản & phân quyền', 'Thêm tài khoản, đặt mật khẩu, quyền xem / sửa từng tab');
     s += muc('slaCfg', '⏱', 'Thời gian có mặt & giờ phun');
     s += muc('vung', '🗺', 'Vùng định vị', 'Ga đi, Ga đến, TTTM Sunplaza');
+    s += muc('sucKhoe', '🩺', 'Sức khỏe hệ thống', 'Dung lượng Drive, số dòng dữ liệu, lưu trữ & thu nhỏ ảnh cũ');
     s += '<div class="grp">Hợp đồng & giảm trừ</div>';
     s += muc('hopDong', '💰', 'Giá trị hợp đồng', 'Phí dịch vụ / tháng theo từng kỳ, trần giảm trừ');
     s += muc('tyTrong', '⚖', 'Tỷ trọng khu vực', 'Ga đi / Ga đến / TTTM → từng vị trí, chia kiểm tra – phun');
@@ -2628,6 +2629,45 @@ async function thuTB(b, ten) {
   const r = await gui(b, 'thuThongBao', { ten: ten || '' }, ten ? 'Đã gửi tới ' + ten : 'Đã gửi – chờ vài giây xem thông báo hiện trên máy');
   if (r && r.ly) toast(r.ly, 'err');
   if (CUR && CUR.fn === 'thongBao') setTimeout(() => PAGES.thongBao(), 1500);
+}
+
+/* ================= SỨC KHỎE HỆ THỐNG · LƯU TRỮ · THU NHỎ ẢNH CŨ ================= */
+function dungLuong(b) { if (!b) return '0 MB'; const g = b / 1073741824; return g >= 1 ? (Math.round(g * 10) / 10).toLocaleString('vi-VN') + ' GB' : Math.round(b / 1048576).toLocaleString('vi-VN') + ' MB'; }
+function thanh(pct) { const m = pct >= 80 ? 'var(--red)' : pct >= 60 ? 'var(--or)' : 'var(--g)'; return `<div style="height:10px;background:#e8eeea;border-radius:6px;overflow:hidden;margin:6px 0"><i style="display:block;height:100%;width:${Math.min(100, pct)}%;background:${m}"></i></div>`; }
+const TEN_TRANG = { KiemTraTram: 'Kiểm tra trạm', KiemTraKhu: 'Kiểm tra khu', Phun: 'Phun', CoMat: 'Điểm danh', YeuCau: 'Yêu cầu phát sinh', Lich: 'Lịch', Tram: 'Trạm', NhatKyTB: 'Nhật ký thông báo', ViPham: 'Vi phạm / lỗi', NguoiDung: 'Người dùng', KhuVuc: 'Khu vực' };
+PAGES.sucKhoe = async function () {
+  setTitle('Sức khỏe hệ thống');
+  main('<div class="muted">Đang kiểm tra…</div>');
+  const me = CUR; const o = await call('sucKhoe', {}, true); if (!o || me !== CUR) { if (!o) main(`<div class="alert err">${h(LOI_CUOI)}</div>`); return; }
+  const sua = q('QuanTri'), d = sua ? '' : 'disabled';
+  const tt = o.thangConLai === null ? '' : o.thangConLai > 120 ? 'hơn 10 năm' : o.thangConLai >= 24 ? '~' + Math.floor(o.thangConLai / 12) + ' năm' : '~' + o.thangConLai + ' tháng';
+  let s = `<div class="card"><b>☁️ Google Drive (ảnh)</b>${o.driveTong ? `${thanh(o.pctDrive)}<div class="row sb"><span>${dungLuong(o.driveDung)} / ${dungLuong(o.driveTong)}</span><b style="color:${o.pctDrive >= 80 ? 'var(--red)' : 'var(--g)'}">${o.pctDrive}%</b></div>` : '<div class="muted">Không đọc được dung lượng Drive.</div>'}
+    <div class="muted" style="margin-top:4px">30 ngày qua: ${o.anh30.toLocaleString('vi-VN')} ảnh ≈ ${o.mbThang.toLocaleString('vi-VN')} MB/tháng${tt ? ` · còn đủ chỗ khoảng <b>${tt}</b> (chưa tính phần tiết kiệm do thu nhỏ ảnh cũ)` : ''}</div></div>
+  <div class="card"><b>📊 Google Sheet</b>${thanh(o.pctO)}<div class="row sb"><span>${o.tongO.toLocaleString('vi-VN')} / 10.000.000 ô</span><b>${o.pctO}%</b></div>
+    <div style="margin-top:6px">${o.trang.slice(0, 6).map(t => `<div class="row sb" style="padding:3px 0;border-bottom:1px solid #eef1ef"><span>${h(TEN_TRANG[t.ten] || t.ten)}</span><span class="${t.dong > 60000 ? 'tag t-bad' : 'muted'}">${t.dong.toLocaleString('vi-VN')} dòng</span></div>`).join('')}</div>
+    <div class="muted" style="margin-top:6px">App chạy nhanh khi mỗi trang dưới khoảng 50.000 dòng. Dữ liệu cũ được tự chuyển sang file lưu trữ nên số dòng giữ ổn định.</div></div>
+  <div class="grp">Tự động bảo trì (3h sáng mỗi ngày)</div>
+  <div class="card"><div class="fld"><label>Giữ trong file chính (tháng) – cũ hơn tự chuyển sang file lưu trữ theo năm</label><input id="ltG" type="number" min="6" max="60" value="${h(o.giuThang)}" ${d} inputmode="numeric"></div>
+    <div class="fld"><label>Thu nhỏ ảnh gốc sau (tháng, 0 = không thu nhỏ)</label><input id="ltA" type="number" min="0" max="120" value="${h(o.anhThang)}" ${d} inputmode="numeric"></div>
+    <div class="muted" style="margin-bottom:8px">Ảnh cũ được thay bằng bản nhỏ (~640px, giảm ~80% dung lượng) <b>ngay tại chỗ</b>: vẫn giữ nguyên link nên xem trên app, link trong Excel và ảnh chèn trong file Excel xuất sau này vẫn hiện; chữ đóng dấu giờ – vị trí vẫn đọc được. Không xóa ảnh.</div>
+    ${sua ? `<button class="btn btn-block" onclick="luuBT(this)">💾 Lưu cài đặt</button>` : ''}</div>
+  <div class="card"><b>Lưu trữ dữ liệu cũ</b><div class="muted">${o.moc ? `Dữ liệu trước <b>${dmy(o.moc)}</b> nằm ở file lưu trữ (xem Nhật ký / xuất dữ liệu khoảng ngày cũ app tự lấy).` : 'Chưa có dữ liệu nào cần lưu trữ.'}${o.lanLT ? '<br>Lần chạy gần nhất: ' + h(o.lanLT) : ''}</div>
+    ${o.fileLT.length ? `<div class="tags" style="margin-top:6px">${o.fileLT.map(f => `<a class="tag" href="${h(f.url)}" target="_blank">📁 Lưu trữ ${h(f.nam)}</a>`).join('')}</div>` : ''}
+    ${sua ? `<button class="btn btn-o btn-block" style="margin-top:8px" onclick="chayBT(this,'luuTru')">Chạy lưu trữ ngay</button>` : ''}</div>
+  <div class="card"><b>Thu nhỏ ảnh cũ</b><div class="muted">${o.lanAnh ? 'Lần gần nhất: ' + h(o.lanAnh) : 'Chưa có ảnh nào đủ cũ để thu nhỏ.'}</div>
+    ${sua ? `<button class="btn btn-o btn-block" style="margin-top:8px" onclick="chayBT(this,'anh')">Thu nhỏ ảnh cũ ngay</button>` : ''}</div>
+  <div class="muted">Khi Drive dùng quá 80%, còn dưới 6 tháng, hoặc Sheet quá lớn, app tự gửi thông báo cho Quản trị (tối đa 1 lần/tuần).</div>`;
+  main(s);
+};
+async function luuBT(b) { const r = await gui(b, 'luuBaoTri', { giuThang: $('#ltG').value, anhThang: $('#ltA').value }, 'Đã lưu'); if (r) PAGES.sucKhoe(); }
+async function chayBT(b, viec) {
+  if (!confirm(viec === 'luuTru' ? 'Chuyển dữ liệu cũ sang file lưu trữ ngay bây giờ?' : 'Thu nhỏ ảnh cũ ngay bây giờ (chạy tối đa ~4 phút, phần còn lại tự làm đêm nay)?')) return;
+  b.disabled = true; toast('Đang chạy… có thể mất vài phút');
+  const r = await call('chayBaoTri', { viec }, true);
+  b.disabled = false;
+  if (!r) return toast(LOI_CUOI, 'err');
+  toast(viec === 'luuTru' ? 'Đã lưu trữ: ' + Object.entries(r.chuyen).map(x => (TEN_TRANG[x[0]] || x[0]) + ' ' + x[1]).join(', ') + ' dòng' : (r.bo || 'Đã thu nhỏ ' + r.soAnh + ' ảnh, tiết kiệm ' + r.tietKiemMB + ' MB'));
+  PAGES.sucKhoe();
 }
 
 /* ================= TÀI KHOẢN ================= */
