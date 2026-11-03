@@ -283,7 +283,7 @@ function thumbs(ids) {
 }
 
 /* ---------------- điều hướng ---------------- */
-const PHIEN_BAN = '02/11/2026 (e)';
+const PHIEN_BAN = '03/11/2026';
 const PAGES = {};
 let NAV_ON = 'home', BADGE_YC = 0, DD_TIEP = null;
 function go(fn, args, push = true) {
@@ -474,7 +474,8 @@ async function ketNoiLai(thongBao) {
 }
 
 /* ---------------- LÀM VIỆC KHI MẤT MẠNG ---------------- */
-if ('serviceWorker' in navigator && /^https:|^http:\/\/localhost/.test(location.href)) navigator.serviceWorker.register('sw.js').catch(() => {});
+// Chỉ đăng ký khi máy chưa có (tránh đè lên bản OneSignal đã đăng ký cùng file sw.js)
+if ('serviceWorker' in navigator && /^https:|^http:\/\/localhost/.test(location.href)) navigator.serviceWorker.getRegistration('./').then(r => { if (r) r.update().catch(() => {}); else navigator.serviceWorker.register('sw.js').catch(() => {}); }).catch(() => navigator.serviceWorker.register('sw.js').catch(() => {}));
 const HD = {
   db: null,
   mo() {
@@ -2506,7 +2507,7 @@ function veTBMay() {
   if (!osCo()) s += `<b>Chưa sẵn sàng</b><div class="muted">Quản trị cần khai báo OneSignal App ID & REST API Key ở phần dưới.</div>`;
   else if (laIOS() && !laAppMH()) s += `<b>iPhone / iPad: cần cài app ra màn hình chính</b><ol style="margin:6px 0 0 18px;padding:0;line-height:1.6"><li>Mở app bằng <b>Safari</b> (iOS 16.4 trở lên)</li><li>Bấm nút <b>Chia sẻ</b> (ô vuông có mũi tên lên)</li><li>Chọn <b>Thêm vào MH chính</b> → Thêm</li><li>Mở app từ biểu tượng mới trên màn hình chính, đăng nhập, vào lại mục này và bấm <b>Bật thông báo</b></li></ol>`;
   else if (!osHoTro()) s += `<b>Trình duyệt không hỗ trợ</b><div class="muted">Android: dùng Chrome. iPhone: Safari, iOS 16.4 trở lên, cài ra màn hình chính.</div>`;
-  else if (p === 'granted') s += `<div class="row sb"><b>✅ Đang bật trên máy này</b><button class="btn btn-o btn-s" onclick="thuTB(this)">Gửi thử</button></div><div class="muted">Tài khoản: ${h(APP.user.ten)}. Đăng xuất thì máy này thôi nhận thông báo của tài khoản.</div>`;
+  else if (p === 'granted') s += `<div class="row sb"><b>✅ Máy đã cho phép thông báo</b><button class="btn btn-o btn-s" onclick="thuTB(this)">Gửi thử</button></div><div class="muted" id="tbGan">Đang kiểm tra liên kết với OneSignal…</div><button class="btn btn-o btn-block" style="margin-top:8px" onclick="batThongBao(this)">🔄 Gắn lại máy này với tài khoản ${h(APP.user.ten)}</button>`;
   else if (p === 'denied') s += `<b style="color:var(--red)">⛔ Máy đang chặn thông báo của app</b><div class="muted" style="margin-top:4px">${laIOS() ? 'Cài đặt iPhone › Thông báo › KS côn trùng › bật Cho phép thông báo.' : 'Chrome: bấm biểu tượng 🔒 / ⓘ cạnh địa chỉ web › Quyền › Thông báo › Cho phép (hoặc Cài đặt Android › Ứng dụng › Chrome › Thông báo). Sau đó tải lại app.'}</div><button class="btn btn-block" style="margin-top:8px" onclick="batThongBao(this)">Thử lại</button>`;
   else s += `<b>Chưa bật</b><div class="muted">Bấm nút dưới, sau đó chọn <b>Cho phép</b> khi điện thoại hỏi.</div><button class="btn btn-block big" style="margin-top:8px" onclick="batThongBao(this)">🔔 Bật thông báo trên máy này</button>`;
   s += '</div>';
@@ -2515,6 +2516,16 @@ function veTBMay() {
     <li><b>Người tạo yêu cầu</b>: NCC đã nhận · đã có mặt · báo xử lý xong (chờ bạn xác nhận) · quá hạn chưa có mặt</li></ul>
     <div class="muted" style="margin-top:6px">Bấm vào thông báo sẽ mở thẳng yêu cầu đó. Thông báo cần mạng vào được Google/OneSignal (4G hoặc wifi ngoài).</div></div>`;
   e.innerHTML = s;
+  if (p === 'granted' && osCo()) kiemTraGan();
+}
+async function kiemTraGan() {
+  try {
+    const OS = await osGanUser(), ps = OS.User.PushSubscription;
+    const ext = OS.User.externalId, ok = ps.optedIn && ps.id && ext === APP.user.ten;
+    const e = $('#tbGan'); if (!e) return;
+    e.innerHTML = ok ? `<span style="color:var(--g)">✓ Đã gắn với tài khoản <b>${h(ext)}</b> – máy này sẽ nhận thông báo của tài khoản này.</span><br><small>Mã máy: ${h(String(ps.id).slice(0, 8))}…</small>`
+      : `<span style="color:var(--red)">⚠ Chưa gắn xong (${!ps.optedIn ? 'chưa đăng ký nhận' : !ps.id ? 'chưa có mã máy' : 'đang gắn với ' + h(ext || '—')}). Bấm "Gắn lại máy này".</span>`;
+  } catch (er) { const e = $('#tbGan'); if (e) e.innerHTML = `<span style="color:var(--red)">⚠ ${h(er.message || er)}</span>`; }
 }
 PAGES.thongBao = async function () {
   setTitle('Thông báo đẩy');
@@ -2529,16 +2540,23 @@ PAGES.thongBao = async function () {
     <div class="fld"><label>App API Key (REST API Key) ${r.coKey ? `<span class="tag t-ok">đã lưu …${h(r.duoiKey)}</span>` : '<span class="tag t-warn">chưa có</span>'}</label><input id="osK" type="password" ${d} placeholder="${r.coKey ? 'Để trống = giữ khóa đang lưu' : 'Dán khóa vào đây'}" autocomplete="new-password"></div>
     <div class="fld"><label>Địa chỉ app (link GitHub Pages – để bấm thông báo mở đúng app)</label><input id="osU" value="${h(r.url || (location.origin + location.pathname))}" ${d}></div>
     <div class="fld"><label>Nhắc NCC trước hạn có mặt (phút, 0 = không nhắc)</label><input id="osN" type="number" min="0" max="240" value="${h(r.nhac)}" ${d} inputmode="numeric"></div>
+    <label class="row" style="font-weight:400;margin-bottom:10px"><input type="checkbox" id="osB" ${r.benA ? 'checked' : ''} ${d}> Báo yêu cầu mới cho cả Bên A (người có tab Công việc), không chỉ NCC</label>
     ${sua ? `<button class="btn btn-block" onclick="luuTB(this)">💾 Lưu</button>` : ''}
-    <div class="muted" style="margin-top:8px">Khóa API chỉ lưu trên máy chủ (Google Sheet), không gửi xuống điện thoại.</div></div>`;
+    <div class="muted" style="margin-top:8px">Khóa API chỉ lưu trên máy chủ (Google Sheet), không gửi xuống điện thoại.</div></div>`
+    + `<div class="grp">Ai nhận "yêu cầu phát sinh mới"</div><div class="card">${r.nguoi.map(n => { const nhan = n.ncc || (r.benA && n.donVi !== 'NCC' && n.cv); return `<div class="row sb" style="padding:4px 0;border-bottom:1px solid #eef1ef"><span>${h(n.hoTen)} <span class="muted">@${h(n.ten)} · ${h(n.donVi)}</span></span><span class="row" style="gap:6px"><span class="tag ${nhan ? 't-ok' : ''}">${nhan ? 'Nhận' : 'Không'}</span>${sua ? `<button class="btn btn-o btn-s" onclick="thuTB(this,'${h(n.ten)}')">Thử</button>` : ''}</span></div>`; }).join('')}
+      <div class="muted" style="margin-top:6px">NCC chỉ nhận khi tài khoản là <b>Nhà cung cấp</b> và có quyền <b>Sửa</b> tab Công việc. Người tạo yêu cầu luôn nhận tin NCC nhận / có mặt / xử lý xong. Bấm <b>Thử</b> để gửi thử tới máy của tài khoản đó.</div></div>`
+    + `<div class="grp">Nhật ký gửi gần đây</div>` + (r.nk.length ? r.nk.map(x => `<div class="card"><div class="row sb"><b style="font-size:14px">${h(x.sk)}</b><span class="tag ${x.kq === 'Đã gửi' && !x.chua ? 't-ok' : 't-bad'}">${h(x.kq)}</span></div>
+      <div class="muted">${h(x.tg)} · tới: ${h(x.den || '(không ai)')}</div>${x.chua ? `<div style="color:var(--red);font-size:13px">Chưa bật thông báo trên máy nào: <b>${h(x.chua)}</b></div>` : ''}${x.kq !== 'Đã gửi' && x.ct ? `<div style="color:var(--red);font-size:13px">${h(x.ct)}</div>` : ''}</div>`).join('') : '<div class="card muted">Chưa có lần gửi nào. Nếu đã tạo yêu cầu mà vẫn trống: Apps Script chưa chạy lại caiDat / chưa Triển khai phiên bản mới.</div>');
 };
 async function luuTB(b) {
-  const r = await gui(b, 'luuThongBao', { appId: $('#osA').value, restKey: $('#osK').value, url: $('#osU').value, nhac: $('#osN').value }, 'Đã lưu');
+  const r = await gui(b, 'luuThongBao', { appId: $('#osA').value, restKey: $('#osK').value, url: $('#osU').value, nhac: $('#osN').value, benA: $('#osB').checked }, 'Đã lưu');
   if (r) { await taiLaiDanhMuc(); OS_SAN = null; PAGES.thongBao(); }
 }
-async function thuTB(b) {
-  try { await osGanUser(); } catch (e) { /* vẫn thử gửi */ }
-  await gui(b, 'thuThongBao', {}, 'Đã gửi – chờ vài giây xem thông báo hiện trên máy');
+async function thuTB(b, ten) {
+  if (!ten) { try { await osGanUser(); } catch (e) { /* vẫn thử gửi */ } }
+  const r = await gui(b, 'thuThongBao', { ten: ten || '' }, ten ? 'Đã gửi tới ' + ten : 'Đã gửi – chờ vài giây xem thông báo hiện trên máy');
+  if (r && r.ly) toast(r.ly, 'err');
+  if (CUR && CUR.fn === 'thongBao') setTimeout(() => PAGES.thongBao(), 1500);
 }
 
 /* ================= TÀI KHOẢN ================= */

@@ -4,7 +4,7 @@
    - Máy chủ dữ liệu (Google) và ảnh: không lưu. */
 /* Thông báo đẩy OneSignal dùng chung service worker này (mạng chặn thì bỏ qua, app vẫn chạy offline) */
 try { importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js'); } catch (e) { /* không tải được OneSignal */ }
-const BAN = 'kct-v5';
+const BAN = 'kct-v6';
 const THU_VIEN = [
   'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
   'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'
