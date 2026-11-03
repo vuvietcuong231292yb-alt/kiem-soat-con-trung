@@ -283,7 +283,7 @@ function thumbs(ids) {
 }
 
 /* ---------------- điều hướng ---------------- */
-const PHIEN_BAN = '03/11/2026';
+const PHIEN_BAN = '03/11/2026 (b)';
 const PAGES = {};
 let NAV_ON = 'home', BADGE_YC = 0, DD_TIEP = null;
 function go(fn, args, push = true) {
@@ -1466,7 +1466,7 @@ function dinhTien(v) { const d = String(v || '').replace(/\D/g, ''); return d ? 
 PAGES.hopDong = async function () {
   setTitle('Hợp đồng & phí');
   main(`<div class="alert">Mỗi kỳ hợp đồng (thường mỗi năm) nhập một dòng: <b>từ tháng – đến tháng</b> và <b>phí dịch vụ/tháng</b>. Báo cáo tháng nào sẽ tự lấy phí của kỳ bao trùm tháng đó; kỳ để trống "đến tháng" là áp dụng đến nay.</div>
-    ${q('QuanTri') ? `<button class="btn big btn-block" onclick="go('hdForm',[0])">＋ Thêm kỳ hợp đồng</button>` : ''}<div id="hdl" class="muted">Đang tải…</div>`);
+    ${q('QuanTri') || qbc('NghiemThu') === 'sua' ? `<button class="btn big btn-block" onclick="go('hdForm',[0])">＋ Thêm kỳ hợp đồng</button>` : ''}<div id="hdl" class="muted">Đang tải…</div>`);
   const me = CUR; const r = await call('dsHopDong', {}, true); if (!r || me !== CUR || !$('#hdl')) return;
   HDS = r;
   const th = homStr().slice(0, 7);
@@ -1481,7 +1481,7 @@ PAGES.hdForm = function (row) {
   const x = row ? HDS.find(v => v.row === row) : null;
   const goiY = HDS[0] || {};
   setTitle(x ? 'Sửa kỳ hợp đồng' : 'Thêm kỳ hợp đồng');
-  const ed = q('QuanTri');
+  const ed = q('QuanTri') || qbc('NghiemThu') === 'sua';
   main(`<div class="card"><div class="mrow"><div class="fld"><label>Từ tháng *</label><input type="month" id="hTu" value="${x ? x.tu : ''}" ${ed ? '' : 'disabled'}></div>
       <div class="fld"><label>Đến tháng</label><input type="month" id="hDen" value="${x ? x.den : ''}" ${ed ? '' : 'disabled'}></div></div>
     <div class="fld"><label>Phí dịch vụ / tháng (đồng) *</label><input id="hPhi" inputmode="numeric" value="${x ? dinhTien(x.phi) : ''}" oninput="this.value=dinhTien(this.value)" placeholder="VD: 31.255.000" style="font-size:18px;font-weight:700" ${ed ? '' : 'disabled'}></div>
@@ -1567,24 +1567,31 @@ async function luuTram(b, ma) {
 /* ================= TAB BÁO CÁO: Nhật ký · Lỗi · Nghiệm thu ================= */
 let BC = null, BC_TH = null, BC_TAB = 'nt', LOI_LOC = 'tat';
 const BC_TABS = [['nk', '📒 Nhật ký'], ['loi', '⚠ Lỗi'], ['nt', '💰 Nghiệm thu']];
+function qbc(c) { const m = APP && APP.user.bc; if (!m) return qt('BaoCao') ? (c === 'NhatKy' ? 'xem' : qt('BaoCao')) : ''; return m[c] || ''; }
+const BC_QUYEN = { nk: 'NhatKy', loi: 'Loi', nt: 'NghiemThu' };
+function bcTabs() { return BC_TABS.filter(t => qbc(BC_QUYEN[t[0]])); }
 function moTab(t) { BC_TAB = t; PAGES.baoCao(); window.scrollTo(0, 0); }
 function khuLink(ma) { return ma ? `<a href="#" onclick="go('khuCT',['${h(ma)}']);return false"><b>${h(ma)}</b></a>` : ''; }
 PAGES.baoCao = function (thang) {
   if (thang) BC_TH = thang;
   BC_TH = BC_TH || homStr().slice(0, 7);
   setTitle('Báo cáo');
-  main(`<div class="seg">${BC_TABS.map(t => `<button class="${BC_TAB === t[0] ? 'on' : ''}" onclick="moTab('${t[0]}')">${t[1]}</button>`).join('')}</div><div id="bch"></div><div id="bcb"></div>`);
+  const dsTab = bcTabs();
+  if (!dsTab.length) return main('<div class="card muted">Bạn chưa được phân quyền xem mục nào của Báo cáo.</div>');
+  if (!dsTab.some(t => t[0] === BC_TAB)) BC_TAB = dsTab[dsTab.length - 1][0];
+  main(`<div class="seg">${dsTab.map(t => `<button class="${BC_TAB === t[0] ? 'on' : ''}" onclick="moTab('${t[0]}')">${t[1]}</button>`).join('')}</div><div id="bch"></div><div id="bcb"></div>`);
   if (BC_TAB === 'nk') { XD_HOST = 'bc'; return veXDTrang(); }
   $('#bch').innerHTML = `<div class="row" style="margin-bottom:8px"><input type="month" id="bt" value="${BC_TH}" onchange="PAGES.baoCao(this.value)" class="grow"><button class="btn" onclick="xuatExcel(this)">⬇ Excel</button></div><div style="margin:-2px 2px 8px">${oXlAnh()}</div>`;
   $('#bcb').innerHTML = '<div class="muted">Đang tính toán…</div>';
+  const thMo = BC_TH;
   taiNhanh('bc2_' + BC_TH, 'baoCao', { thang: BC_TH }, (r) => {
-    if (!$('#bcb')) return;
+    if (!$('#bcb') || BC_TAB === 'nk' || BC_TH !== thMo) return;
     if (!r || !r.nt) { $('#bcb').innerHTML = `<div class="alert err">${h(OFFLINE ? 'Đang mất mạng – chưa có báo cáo tháng này lưu trong máy.' : LOI_CUOI)}</div>`; return; }
     BC = r; veBC();
   });
 };
 function veBC() {
-  if (!$('#bcb') || !BC) return;
+  if (!$('#bcb') || !BC || BC_TAB === 'nk') return;
   let s = BC.nt.tamTinh ? `<div class="alert">Tháng chưa kết thúc – số liệu <b>tạm tính</b> (chỉ tính các tuần đã qua; phần phun tính khi hết tháng).</div>` : '';
   if (Math.abs(BC.nt.tongTyTrong - 100) > 0.05) s += `<div class="alert err">Tổng tỷ trọng các khu đang là ${BC.nt.tongTyTrong}% (phải 100%) – sửa ở Cài đặt › Tỷ trọng khu vực.</div>`;
   s += BC_TAB === 'loi' ? veLoi() : veNT();
@@ -1597,7 +1604,7 @@ function veNT() {
   n.khu.forEach(k => { const g = nhom[k.nhom] = nhom[k.nhom] || { tt: 0, tien: 0, dat: 0, ds: [] }; g.tt += k.tt; g.tien += k.tien; g.dat += k.tienDat; g.ds.push(k); });
   let s = `<div class="card"><div class="grp" style="margin-top:0">① Giá trị hợp đồng tháng ${BC_TH.slice(5)}/${BC_TH.slice(0, 4)}</div>
     <div class="sumrow"><span>Phí dịch vụ</span><b class="money">${tien(n.phi)}</b></div>
-    <div class="muted">${n.soHD ? 'HĐ ' + h(n.soHD) : ''}${n.kyHD ? ' · kỳ ' + h(n.kyHD) : ''} · trần giảm trừ ${n.tranPct}% = ${tien(n.tran)}${q('QuanTri') ? ` · <a href="#" onclick="go('hopDong');return false">sửa</a>` : ''}</div></div>`;
+    <div class="muted">${n.soHD ? 'HĐ ' + h(n.soHD) : ''}${n.kyHD ? ' · kỳ ' + h(n.kyHD) : ''} · trần giảm trừ ${n.tranPct}% = ${tien(n.tran)}${q('QuanTri') || qbc('NghiemThu') === 'sua' ? ` · <a href="#" onclick="go('hopDong');return false">sửa</a>` : ''}</div></div>`;
   s += `<div class="card"><div class="grp" style="margin-top:0">② Kết quả đạt được theo tỷ trọng</div>
     <div class="sumrow"><span>Giá trị đạt</span><b class="money" style="color:var(--g)">${tien(n.datDuoc)}</b></div>
     <div class="sumrow"><span class="muted">Trừ do thiếu lượt (lỗi tỷ trọng)</span><span class="money" style="color:var(--red)">${n.tongTT ? '−' : ''}${tien(n.tongTT)}</span></div>`;
@@ -2403,13 +2410,16 @@ function themNK(wb, nk, ANH) {
 function ghiChuAnh(ANH) { return !ANH ? 'Không kèm ảnh – cột "Link ảnh" mở ảnh gốc trên Google Drive (cần mạng vào được Google).' : `Đã chèn ${Object.keys(ANH).filter(k => k[0] !== '_').length} ảnh thu nhỏ trực tiếp vào file (xem được không cần mạng)${ANH._tong > ANH._lay ? `; còn ${ANH._tong - ANH._lay} ảnh vượt giới hạn ${ANH_TOI_DA} ảnh/lần chỉ có link – chọn khoảng ngày ngắn hơn để chèn đủ` : ''}. Ảnh gốc độ nét cao: cột "Link ảnh".`; }
 
 /* ================= NGƯỜI DÙNG ================= */
-const TAB_TEN = [['CongViec', 'Công việc', 'Sửa: NCC điểm danh, quét trạm, phun, xử lý phát sinh; Bên A tạo & xác nhận yêu cầu'], ['Lich', 'Lịch', 'Sửa: nhập / sửa lịch, tải Excel'], ['KhuVuc', 'Khu vực', 'Sửa: thêm/sửa/xóa khu, trạm, in QR'], ['BaoCao', 'Báo cáo', 'Sửa: thêm/bỏ qua lỗi, duyệt giải trình'], ['CaiDat', 'Cài đặt', 'Sửa: tài khoản, hợp đồng, tỷ trọng, lỗi tiền, thời gian, vùng']];
+const TAB_TEN = [['CongViec', 'Công việc', 'Sửa: NCC điểm danh, quét trạm, phun, xử lý phát sinh; Bên A tạo & xác nhận yêu cầu'], ['Lich', 'Lịch', 'Sửa: nhập / sửa lịch, tải Excel'], ['KhuVuc', 'Khu vực', 'Sửa: thêm/sửa/xóa khu, trạm, in QR'], ['BaoCao', 'Báo cáo', 'Chỉnh riêng từng mục con bên dưới'], ['CaiDat', 'Cài đặt', 'Sửa: tài khoản, hợp đồng, tỷ trọng, lỗi tiền, thời gian, vùng']];
 const MAU_Q = {
-  'NCC thực hiện': { donVi: 'NCC', tab: { CongViec: 'sua', Lich: 'sua', KhuVuc: 'sua', BaoCao: '', CaiDat: '' } },
-  'Bên A giám sát': { donVi: 'Bên A', tab: { CongViec: 'sua', Lich: 'xem', KhuVuc: 'xem', BaoCao: 'sua', CaiDat: '' } },
-  'Thanh tra (chỉ xem)': { donVi: 'Bên A', tab: { CongViec: 'xem', Lich: 'xem', KhuVuc: 'xem', BaoCao: 'xem', CaiDat: '' } },
-  'Quản trị': { donVi: 'Bên A', tab: { CongViec: 'sua', Lich: 'sua', KhuVuc: 'sua', BaoCao: 'sua', CaiDat: 'sua' } }
+  'NCC thực hiện': { donVi: 'NCC', tab: { CongViec: 'sua', Lich: 'sua', KhuVuc: 'sua', BaoCao: '', CaiDat: '' }, bc: { NhatKy: '', Loi: '', NghiemThu: '' } },
+  'Bên A giám sát': { donVi: 'Bên A', tab: { CongViec: 'sua', Lich: 'xem', KhuVuc: 'xem', BaoCao: 'sua', CaiDat: '' }, bc: { NhatKy: 'xem', Loi: 'sua', NghiemThu: 'xem' } },
+  'Thanh tra (chỉ xem)': { donVi: 'Bên A', tab: { CongViec: 'xem', Lich: 'xem', KhuVuc: 'xem', BaoCao: 'xem', CaiDat: '' }, bc: { NhatKy: 'xem', Loi: 'xem', NghiemThu: 'xem' } },
+  'Quản trị': { donVi: 'Bên A', tab: { CongViec: 'sua', Lich: 'sua', KhuVuc: 'sua', BaoCao: 'sua', CaiDat: 'sua' }, bc: { NhatKy: 'xem', Loi: 'sua', NghiemThu: 'sua' } }
 };
+const BC_CON_TEN = [['NhatKy', 'Nhật ký', 'Xem lịch sử kiểm tra, phun, điểm danh kèm ảnh; xuất Excel', false], ['Loi', 'Lỗi', 'Sửa: thêm / bỏ qua / xóa lỗi, duyệt giải trình', true], ['NghiemThu', 'Nghiệm thu', 'Sửa: sửa giá trị hợp đồng, trần giảm trừ', true]];
+function bcTuTab(v) { return { NhatKy: v ? 'xem' : '', Loi: v, NghiemThu: v }; }
+function bcMax() { const vs = Object.values(UQ.bc); UQ.tab.BaoCao = vs.includes('sua') ? 'sua' : vs.includes('xem') ? 'xem' : ''; }
 let USERS = [], UQ = null;
 PAGES.users = async function () {
   setTitle('Tài khoản');
@@ -2424,6 +2434,7 @@ PAGES.userForm = function (ten) {
   const u = ten ? USERS.find(x => x.ten === ten) : null;
   const sua = q('QuanTri');
   UQ = { donVi: u ? u.donVi : 'NCC', tab: Object.assign({}, u ? u.tab : MAU_Q['NCC thực hiện'].tab) };
+  UQ.bc = Object.assign({}, u && u.bc ? u.bc : bcTuTab(UQ.tab.BaoCao || ''));
   setTitle(u ? 'Sửa tài khoản' : 'Thêm tài khoản');
   main(`<div class="card"><div class="fld"><label>Tên đăng nhập *</label><input id="ut" value="${h(u ? u.ten : '')}" ${u ? 'disabled' : ''} autocapitalize="off" placeholder="vd: gm.thiep (không dấu, không cách)"></div>
     <div class="fld"><label>Họ tên *</label><input id="uh" value="${h(u ? u.hoTen : '')}"></div>
@@ -2437,13 +2448,19 @@ PAGES.userForm = function (ten) {
     ${sua ? `<button class="btn big btn-block" onclick="luuUser(this,${u ? 'false' : 'true'})">💾 Lưu</button>` : ''}`);
   veUQ();
 };
-function apMauQ(m) { UQ = { donVi: MAU_Q[m].donVi, tab: Object.assign({}, MAU_Q[m].tab) }; veUQ(); }
+function apMauQ(m) { UQ = { donVi: MAU_Q[m].donVi, tab: Object.assign({}, MAU_Q[m].tab), bc: Object.assign({}, MAU_Q[m].bc) }; veUQ(); }
 function veUQ() {
   document.querySelectorAll('#uDV button').forEach((b, i) => b.className = ['NCC', 'Bên A'][i] === UQ.donVi ? 'on' : '');
-  $('#uQ').innerHTML = TAB_TEN.map(t => `<div style="margin:10px 0"><div class="row sb"><b>${t[1]}</b><div class="seg3" style="width:190px">${[['', 'Không'], ['xem', 'Xem'], ['sua', 'Sửa']].map(o => `<button class="${(UQ.tab[t[0]] || '') === o[0] ? 'on' : ''}" onclick="UQ.tab['${t[0]}']='${o[0]}';veUQ()">${o[1]}</button>`).join('')}</div></div><div class="muted" style="font-size:12px">${t[2]}</div></div>`).join('');
+  const nut = (cur, ds, fn) => `<div class="seg3" style="width:190px">${ds.map(o => `<button class="${(cur || '') === o[0] ? 'on' : ''}" onclick="${fn(o[0])}">${o[1]}</button>`).join('')}</div>`;
+  const KXS = [['', 'Không'], ['xem', 'Xem'], ['sua', 'Sửa']];
+  $('#uQ').innerHTML = TAB_TEN.map(t => {
+    let s = `<div style="margin:10px 0"><div class="row sb"><b>${t[1]}</b>${nut(UQ.tab[t[0]], KXS, v => t[0] === 'BaoCao' ? `UQ.tab.BaoCao='${v}';UQ.bc=bcTuTab('${v}');veUQ()` : `UQ.tab['${t[0]}']='${v}';veUQ()`)}</div><div class="muted" style="font-size:12px">${t[2]}</div></div>`;
+    if (t[0] === 'BaoCao') s += `<div style="margin:-4px 0 10px 14px;padding-left:10px;border-left:3px solid #d8e6dd">` + BC_CON_TEN.map(c => `<div style="margin:8px 0"><div class="row sb"><span>↳ ${c[1]}</span>${nut(UQ.bc[c[0]], c[3] ? KXS : KXS.slice(0, 2), v => `UQ.bc['${c[0]}']='${v}';bcMax();veUQ()`)}</div><div class="muted" style="font-size:12px">${c[2]}</div></div>`).join('') + '</div>';
+    return s;
+  }).join('');
 }
 async function luuUser(b, moi) {
-  const p = { moi, ten: $('#ut').value, hoTen: $('#uh').value, donVi: UQ.donVi, sdt: $('#us').value, tt: $('#utt').value, matKhau: $('#up').value, tab: UQ.tab, sieuQT: $('#uSQ') ? $('#uSQ').checked : false };
+  const p = { moi, ten: $('#ut').value, hoTen: $('#uh').value, donVi: UQ.donVi, sdt: $('#us').value, tt: $('#utt').value, matKhau: $('#up').value, tab: UQ.tab, bc: UQ.bc, sieuQT: $('#uSQ') ? $('#uSQ').checked : false };
   const r = await gui(b, 'luuNguoiDung', p, 'Đã lưu tài khoản');
   if (r) goBack();
 }
