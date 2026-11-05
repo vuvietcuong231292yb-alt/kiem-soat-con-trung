@@ -283,7 +283,7 @@ function thumbs(ids) {
 }
 
 /* ---------------- điều hướng ---------------- */
-const PHIEN_BAN = '03/11/2026 (f)';
+const PHIEN_BAN = '05/11/2026 (b)';
 const PAGES = {};
 let NAV_ON = 'home', BADGE_YC = 0, DD_TIEP = null;
 function go(fn, args, push = true) {
@@ -1439,12 +1439,19 @@ function soTuanThang(th) {
   while (d <= cuoi) { if (new Date(d.getTime() + 3 * 864e5).getUTCMonth() === m - 1) n++; d = new Date(d.getTime() + 7 * 864e5); }
   return n;
 }
+let TT_CACH = null;
 PAGES.tyTrong = function () {
   setTitle('Tỷ trọng khu vực');
   const sua = q('QuanTri'), phi = APP.cfg.GiaTriHopDong || 0, nt = soTuanThang(homStr().slice(0, 7));
-  let s = `<div class="alert">Toàn khu du lịch = <b>100%</b>, tổng của từng nhóm (Ga đi / Ga đến / TTTM) bằng tổng % các vị trí trong nhóm. Mỗi vị trí chia <b>kiểm tra trạm</b> và <b>phun</b> (gồm tinh dầu sả, phun quý) theo tỷ lệ bên dưới; thiếu 1 lần sẽ trừ đúng phần tương ứng.</div>
-    <div class="card"><div class="fld"><label>Phần dành cho kiểm tra trạm (%) – còn lại cho phun</label><input id="tyKT" type="number" min="0" max="100" step="5" value="${APP.tyLeKT || 50}" ${sua ? '' : 'disabled'} oninput="veTong()"></div>
-    <div class="muted">Khu chỉ có kiểm tra (không có phun) thì kiểm tra chiếm 100% và ngược lại. Ví dụ tính tiền dưới đây theo phí ${tien(phi)}/tháng, tháng này ${nt} tuần.</div></div>
+  TT_CACH = TT_CACH || APP.cachKT || 'tram';
+  let s = `<div class="alert">Toàn khu du lịch = <b>100%</b>, tổng của từng nhóm (Ga đi / Ga đến / TTTM) bằng tổng % các vị trí trong nhóm.</div>
+    <div class="card"><b>Thiếu kiểm tra trạm bẫy tính thế nào?</b>
+    <div class="seg3" style="margin:8px 0">${[['tram', 'Phạt tiền cố định / trạm'], ['tytrong', 'Trừ theo tỷ trọng']].map(o => `<button class="${TT_CACH === o[0] ? 'on' : ''}" ${sua ? `onclick="TT_CACH='${o[0]}';PAGES.tyTrong()"` : 'disabled'}>${o[1]}</button>`).join('')}</div>
+    ${TT_CACH === 'tram' ? `<div class="muted">Ngày có lịch kiểm tra (K) của khu: mỗi trạm không được quét trong ngày đó bị phạt theo lỗi <b>"Không quét trạm bẫy theo lịch kiểm tra"</b> (mặc định 100.000 đ/trạm – sửa ở Cài đặt › Lỗi trừ tiền). Khu không có trạm thì không bị phạt mục này.</div><input id="tyKT" type="hidden" value="${APP.tyLeKT === undefined ? 50 : APP.tyLeKT}">
+      <div class="fld" style="margin-top:10px"><label>Phần tỷ trọng mỗi khu dành cho phun (%)</label><input id="tyP" type="number" min="0" max="100" step="5" value="${APP.tyLePhun === undefined ? 50 : APP.tyLePhun}" ${sua ? '' : 'disabled'} oninput="veTong()"></div>
+      <div class="muted">Ví dụ khu 4% = 1.000.000 đ, phần phun 50%: không phun lần nào trong tháng → trừ 500.000 đ; phải phun 2 lần mà thiếu 1 → trừ 250.000 đ.</div>`
+      : `<div class="fld"><label>Phần dành cho kiểm tra trạm (%) – còn lại cho phun</label><input id="tyKT" type="number" min="0" max="100" step="5" value="${APP.tyLeKT === undefined ? 50 : APP.tyLeKT}" ${sua ? '' : 'disabled'} oninput="veTong()"></div><div class="muted">Thiếu 1 lượt kiểm tra trừ đúng phần tương ứng của khu. Khu chỉ có kiểm tra (không có phun) thì kiểm tra chiếm 100% và ngược lại.</div>`}
+    <div class="muted" style="margin-top:6px">Ví dụ tính tiền dưới đây theo phí ${tien(phi)}/tháng, tháng này ${nt} tuần.</div></div>
     <div class="card fbar" style="top:52px"><div class="row sb"><b>Tổng</b><b id="ttTong" style="font-size:20px">–</b></div><div id="ttNhom" class="tags"></div></div>`;
   NHOM_KHU.concat(APP.khu.map(x => x.nhom)).filter((v, i, a) => a.indexOf(v) === i).forEach(n => {
     const ds = APP.khu.filter(k => k.nhom === n); if (!ds.length) return;
@@ -1463,15 +1470,15 @@ function chiaDeu(b) {
   veTong();
 }
 function veTong() {
-  const phi = APP.cfg.GiaTriHopDong || 0, kt = (+$('#tyKT').value || 0) / 100, nt = soTuanThang(homStr().slice(0, 7));
+  const phi = APP.cfg.GiaTriHopDong || 0, kt = TT_CACH === 'tram' ? 0 : (+$('#tyKT').value || 0) / 100, nt = soTuanThang(homStr().slice(0, 7));
   let tong = 0; const nhom = {};
   document.querySelectorAll('.ttO').forEach(x => {
     const v = +x.value || 0; tong += v; nhom[x.dataset.n] = (nhom[x.dataset.n] || 0) + v;
     const k = APP.khu.find(z => z.ma === x.dataset.ma); const e = document.querySelector(`.vd[data-ma="${x.dataset.ma}"]`);
     if (k && e) {
       const tienK = phi * v / 100, canKT = k.kt * nt, canP = k.pt + k.sa + (k.pq ? k.pq / 3 : 0);
-      const pKT = canKT ? (canP ? kt : 1) : 0, pP = canP ? (canKT ? 1 - kt : 1) : 0;
-      e.textContent = `${tien(Math.round(tienK))}/tháng` + (canKT ? ` · thiếu 1 lần KT ≈ ${tien(Math.round(tienK * pKT / canKT))}` : '') + (canP ? ` · thiếu 1 lần phun ≈ ${tien(Math.round(tienK * pP / Math.max(1, Math.round(canP))))}` : '');
+      const pKT = TT_CACH === 'tram' ? 0 : canKT ? (canP ? kt : 1) : 0, pP = !canP ? 0 : TT_CACH === 'tram' ? (+($('#tyP') || {}).value || 0) / 100 : (canKT ? 1 - kt : 1);
+      e.textContent = `${tien(Math.round(tienK))}/tháng` + (canKT && pKT ? ` · thiếu 1 lần KT ≈ ${tien(Math.round(tienK * pKT / canKT))}` : '') + (canP ? ` · thiếu 1 lần phun ≈ ${tien(Math.round(tienK * pP / Math.max(1, Math.round(canP))))}` : '');
     }
   });
   tong = Math.round(tong * 100) / 100;
@@ -1482,7 +1489,7 @@ function veTong() {
 }
 async function luuTT(b) {
   const ds = [...document.querySelectorAll('.ttO')].map(x => ({ ma: x.dataset.ma, tt: x.value }));
-  const r = await gui(b, 'luuTyTrong', { ds, tyLeKT: $('#tyKT').value }, 'Đã lưu tỷ trọng');
+  const r = await gui(b, 'luuTyTrong', { ds, tyLeKT: $('#tyKT').value, tyLePhun: $('#tyP') ? $('#tyP').value : '', cachKT: TT_CACH }, 'Đã lưu tỷ trọng');
   if (!r) return;
   await taiLaiDanhMuc(); goBack();
 }
@@ -1763,6 +1770,7 @@ function veNT() {
     <div class="muted">${n.soHD ? 'HĐ ' + h(n.soHD) : ''}${n.kyHD ? ' · kỳ ' + h(n.kyHD) : ''} · trần giảm trừ ${n.tranPct}% = ${tien(n.tran)}${q('QuanTri') || qbc('NghiemThu') === 'sua' ? ` · <a href="#" onclick="go('hopDong');return false">sửa</a>` : ''}</div></div>`;
   s += `<div class="card"><div class="grp" style="margin-top:0">② Kết quả đạt được theo tỷ trọng</div>
     <div class="sumrow"><span>Giá trị đạt</span><b class="money" style="color:var(--g)">${tien(n.datDuoc)}</b></div>
+    ${n.cachKT === 'tram' ? `<div class="muted" style="margin:-2px 0 4px">Thiếu phun trừ tối đa ${n.tyLePhun}% giá trị mỗi khu; thiếu quét trạm phạt theo trạm ở phần ③.</div>` : ''}
     <div class="sumrow"><span class="muted">Trừ do thiếu lượt (lỗi tỷ trọng)</span><span class="money" style="color:var(--red)">${n.tongTT ? '−' : ''}${tien(n.tongTT)}</span></div>`;
   Object.keys(nhom).forEach(g => {
     const x = nhom[g];
