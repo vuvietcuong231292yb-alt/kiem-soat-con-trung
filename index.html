@@ -283,7 +283,7 @@ function thumbs(ids) {
 }
 
 /* ---------------- điều hướng ---------------- */
-const PHIEN_BAN = '05/11/2026 (c)';
+const PHIEN_BAN = '25/11/2026';
 const PAGES = {};
 let NAV_ON = 'home', BADGE_YC = 0, DD_TIEP = null;
 function go(fn, args, push = true) {
@@ -1706,7 +1706,7 @@ PAGES.tramForm = function (ma, khuMD) {
   const t = ma ? APP.tram.find(x => x.ma === ma) : null;
   setTitle(t ? 'Sửa trạm ' + ma : 'Thêm trạm'); WM = t ? 'Trạm ' + ma + ' · ' + tenKhu(t.khu) : 'Khai báo trạm mới';
   main(`<div class="card"><div class="fld"><label>Khu vực *</label>${t ? `<div><b>${h(t.khu)}</b> – ${h(tenKhu(t.khu))}</div><input type="hidden" id="fk" value="${h(t.khu)}">` : khuSelect('fk', khuMD || '', '— Chọn khu vực —')}</div>
-    <div class="fld"><label>Loại trạm *</label>${chips('fl', APP.dm.loaiTram, false, t ? t.loai : 'Trạm bả ngoài trời')}</div>
+    <div class="fld"><label>Loại trạm *</label>${chips('fl', APP.dm.loaiTram, false, t ? t.loai : 'Hộp bả')}</div>
     <div class="fld"><label>Mô tả vị trí *</label><input id="fv" value="${h(t ? t.viTri : '')}" placeholder="VD: chân tường rào phía Đông, cạnh cột đèn số 3"></div>
     ${t ? `<div class="fld"><label>Trạng thái</label>${chips('ft', ['Đang dùng', 'Ngừng sử dụng'], false, t.tt)}</div>` : ''}
     ${photoField('ft', 'Ảnh trạm', false)}
